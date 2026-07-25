@@ -70,7 +70,13 @@ async def seed_alex_patient_profile():
             await db.delete(m)
         await db.commit()
 
-        # 5. Insert Rich Memory Profile Embeddings
+        # Clear old checkins for clean re-seed
+        res_chk = await db.execute(select(RecoveryCheckin).where(RecoveryCheckin.patient_id == DEFAULT_PATIENT_ID))
+        for c in res_chk.scalars().all():
+            await db.delete(c)
+        await db.commit()
+
+        # 5. Insert Rich Memory Profile Embeddings (No 42 day references)
         memories_data = [
             {
                 "type": "motivation",
@@ -109,8 +115,8 @@ async def seed_alex_patient_profile():
             },
             {
                 "type": "milestone",
-                "content": "Recovery Milestone: Early recovery stage started Jan 05, 2026. Current Sobriety Streak: 42 Days. Previous longest streak: 90 Days. Target goal: Long-term sobriety and family wellbeing.",
-                "tags": ["42 days streak", "early recovery", "90 days goal"]
+                "content": "Recovery Profile: Committed to long-term sobriety, family health, and emotional growth. Rebuilding relationships and being present for family milestones.",
+                "tags": ["sobriety goal", "family health"]
             }
         ]
 
@@ -127,48 +133,40 @@ async def seed_alex_patient_profile():
             db.add(mem_obj)
         await db.commit()
 
-        # 6. Insert Realistic Historical Check-ins (42-Day Sobriety Streak)
+        # 6. Insert Clean Historical Reflections
         now = datetime.utcnow()
         checkins_seed = [
             {
-                "days_ago": 40,
-                "mood": 4,
-                "craving": 8,
-                "text": "Day 2 of recovery. Experienced intense evening cravings after a tough work meeting. Took a 20-minute walk outside and talked with Sarah. Staying committed for my daughter.",
-                "tier": "High",
-                "summary": "High craving managed successfully with walking and spouse support."
+                "days_ago": 14,
+                "text": "Experienced evening cravings after a tough work meeting. Took a 20-minute walk outside and talked with Sarah. Staying committed for my daughter.",
+                "sentiment_label": "Positive",
+                "sentiment_score": 0.8,
+                "tier": "Low",
+                "summary": "Craving managed successfully with walking and spouse support."
             },
             {
-                "days_ago": 30,
-                "mood": 6,
-                "craving": 4,
-                "text": "Day 12 check-in. Work deadline was stressful today, but I headed straight to the gym instead of isolating. Feeling clearer head and sleeping better.",
-                "tier": "Medium",
+                "days_ago": 7,
+                "text": "Work deadline was stressful today, but I headed straight to the gym instead of isolating. Feeling clearer head and sleeping better.",
+                "sentiment_label": "Positive",
+                "sentiment_score": 0.7,
+                "tier": "Low",
                 "summary": "Moderate stress redirected to gym workout."
             },
             {
-                "days_ago": 15,
-                "mood": 8,
-                "craving": 2,
-                "text": "Day 27 check-in. Spent quality weekend time with my daughter and Sarah. Reading a story before bed reminded me why this 42-day journey matters.",
+                "days_ago": 3,
+                "text": "Spent quality weekend time with my daughter and Sarah. Reading a story before bed reminded me why this journey matters.",
+                "sentiment_label": "Positive",
+                "sentiment_score": 0.95,
                 "tier": "Low",
-                "summary": "Positive mood and low craving. Strong motivation with family."
+                "summary": "Positive mood. Strong motivation with family."
             },
             {
-                "days_ago": 2,
-                "mood": 7,
-                "craving": 3,
-                "text": "Day 40 check-in. Work project went live today. Had a moment of 'I deserve a drink', but remembered my walking coping strategy and called Michael for a quick chat.",
+                "days_ago": 1,
+                "text": "Work project went live today. Had a moment of stress, but remembered my walking coping strategy and called Michael for a quick chat.",
+                "sentiment_label": "Positive",
+                "sentiment_score": 0.85,
                 "tier": "Low",
                 "summary": "Work milestone completed sober using accountability call."
-            },
-            {
-                "days_ago": 0,
-                "mood": 7,
-                "craving": 2,
-                "text": "Day 42 check-in. Feeling proud of reaching 42 days sober. Ready to continue building healthy habits and being fully present for my family.",
-                "tier": "Low",
-                "summary": "42-Day sobriety milestone achieved!"
             }
         ]
 
@@ -176,18 +174,18 @@ async def seed_alex_patient_profile():
             created_dt = now - timedelta(days=c["days_ago"])
             chk = RecoveryCheckin(
                 patient_id=DEFAULT_PATIENT_ID,
-                mood_score=c["mood"],
-                craving_level=c["craving"],
                 journal_text=c["text"],
                 risk_tier=c["tier"],
-                risk_score=0.1 if c["tier"] == "Low" else 0.6,
+                risk_score=0.1,
+                sentiment_label=c["sentiment_label"],
+                sentiment_score=c["sentiment_score"],
                 ai_summary=c["summary"],
                 created_at=created_dt
             )
             db.add(chk)
         await db.commit()
 
-        print("✅ Alex Carter Patient Memory Profile successfully seeded into SQLite!")
+        print("✅ Alex Carter Profile re-seeded cleanly into SQLite without 42-day references!")
 
 if __name__ == "__main__":
     asyncio.run(seed_alex_patient_profile())

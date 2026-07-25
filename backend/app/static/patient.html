@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RecoverAI — Daily Reflection & Automated Sentiment Journal</title>
+  <title>RecoverAI — Daily Reflection & Voice Companion</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,7 +36,7 @@
       <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-teal-500/20">R</div>
       <div>
         <h1 class="font-bold text-lg text-gray-100 tracking-tight">RecoverAI</h1>
-        <p class="text-xs text-teal-400 font-medium">Daily Reflection & Log Sentiment Engine</p>
+        <p class="text-xs text-teal-400 font-medium">Daily Reflection & Voice Companion</p>
       </div>
     </div>
     <div class="flex items-center gap-3 text-xs sm:text-sm font-medium">
@@ -51,134 +51,99 @@
   </header>
 
   <!-- Main Patient Dashboard -->
-  <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
+  <main class="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
 
-    <!-- Hero Card -->
-    <div class="glass rounded-2xl p-6 relative overflow-hidden bg-gradient-to-r from-teal-950/40 via-gray-900 to-cyan-950/40 border border-teal-500/30">
-      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div class="space-y-2">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-semibold">
+    <!-- Unified Recovery Companion Card -->
+    <div class="glass rounded-2xl p-6 flex flex-col justify-between space-y-5 border border-teal-500/30 bg-gradient-to-b from-gray-900 via-gray-900/90 to-teal-950/20">
+      
+      <!-- Top Status & Audio Control Header -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-[11px] font-semibold">
               📍 Live GPS Sentinel Active
             </span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold">
+            <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold">
               📊 Automated Log Sentiment Analysis Active
             </span>
           </div>
-          <h2 class="text-2xl font-bold text-gray-100">Alex's Daily Recovery Journal & Voice Companion</h2>
-          <p class="text-xs sm:text-sm text-gray-400">Speak or write your daily reflections. Automated sentiment analysis metrics are evaluated for each log and saved directly into SQLite (`recoverai.db`).</p>
+          <h2 class="text-xl font-bold text-gray-100">Alex's Daily Reflection Space</h2>
         </div>
 
-        <div class="flex items-center gap-2">
-          <!-- Voice Mute Toggle -->
-          <button id="ttsToggleBtn" onclick="toggleTtsMute()" class="px-3.5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded-xl border border-gray-700 transition flex items-center gap-1.5">
-            <span id="ttsIcon">🔊</span> <span id="ttsLabel">Voice Audio ON</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Expressive Audio Control Bar -->
-    <div class="glass rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 border border-teal-500/20 bg-teal-950/20">
-      <div class="flex items-center gap-2 text-xs font-semibold text-teal-300">
-        <span>🎙️ Voice Companion Settings:</span>
-      </div>
-      <div class="flex flex-wrap items-center gap-4 text-xs">
-        <div>
-          <label class="text-gray-400 text-[11px] block mb-1">Select Voice</label>
-          <select id="voiceSelect" class="bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-teal-500 max-w-[200px]">
-            <option value="">Default Natural Voice</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-gray-400 text-[11px] block mb-1">Expressive Pitch: <span id="pitchVal" class="text-teal-400 font-bold">1.0</span></label>
-          <input type="range" id="pitchSlider" min="0.6" max="1.4" step="0.05" value="1.0" oninput="document.getElementById('pitchVal').innerText = this.value" class="accent-teal-500 cursor-pointer w-28">
-        </div>
-        <div>
-          <label class="text-gray-400 text-[11px] block mb-1">Speaking Speed: <span id="rateVal" class="text-teal-400 font-bold">0.95</span></label>
-          <input type="range" id="rateSlider" min="0.7" max="1.3" step="0.05" value="0.95" oninput="document.getElementById('rateVal').innerText = this.value" class="accent-teal-500 cursor-pointer w-28">
-        </div>
-      </div>
-    </div>
-
-    <!-- Companion Expressive Voice Chat -->
-    <div class="glass rounded-2xl p-6 flex flex-col justify-between space-y-4">
-      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-        <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
-          <span class="font-semibold text-gray-200 text-sm">RecoverAI Voice Reflection Space</span>
-        </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
           <span id="riskBadge" class="px-3 py-1 rounded-xl text-[11px] font-bold border border-emerald-600 bg-emerald-950/80 text-emerald-300">
             🛡️ Status: Stable
           </span>
-          <span id="wsStatus" class="text-xs text-emerald-400 font-medium">● Connected</span>
+          <button id="ttsToggleBtn" onclick="toggleTtsMute()" class="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded-xl border border-gray-700 transition flex items-center gap-1.5">
+            <span id="ttsIcon">🔊</span> <span id="ttsLabel">Audio ON</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Expressive Voice Settings -->
+      <div class="flex flex-wrap items-center justify-between gap-3 text-xs bg-gray-950/50 p-3 rounded-xl border border-gray-800/80">
+        <div class="flex items-center gap-2 font-semibold text-teal-400">
+          <span>🎙️ Voice Companion Pacing:</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-4">
+          <div>
+            <label class="text-gray-400 text-[10px] block">Voice</label>
+            <select id="voiceSelect" class="bg-gray-900 border border-gray-800 rounded-lg px-2 py-0.5 text-[11px] text-gray-200 focus:outline-none focus:border-teal-500 max-w-[180px]">
+              <option value="">Default Natural Voice</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-gray-400 text-[10px] block">Pitch: <span id="pitchVal" class="text-teal-400 font-bold">1.0</span></label>
+            <input type="range" id="pitchSlider" min="0.6" max="1.4" step="0.05" value="1.0" oninput="document.getElementById('pitchVal').innerText = this.value" class="accent-teal-500 cursor-pointer w-24">
+          </div>
+          <div>
+            <label class="text-gray-400 text-[10px] block">Speed: <span id="rateVal" class="text-teal-400 font-bold">0.95</span></label>
+            <input type="range" id="rateSlider" min="0.7" max="1.3" step="0.05" value="0.95" oninput="document.getElementById('rateVal').innerText = this.value" class="accent-teal-500 cursor-pointer w-24">
+          </div>
         </div>
       </div>
 
       <!-- Mic Visualizer Circle (Web Speech STT with 2-sec Silence Buffer) -->
-      <div class="flex flex-col items-center justify-center py-6 bg-gray-950/60 rounded-xl border border-gray-800/80">
+      <div class="flex flex-col items-center justify-center py-5 bg-gray-950/80 rounded-xl border border-gray-800/80">
         <button id="micBtn" onclick="toggleMic()" class="w-16 h-16 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20 transition transform active:scale-95">
           <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
         </button>
         <span id="micText" class="text-xs text-gray-400 mt-3 font-medium">Click microphone to speak to companion</span>
       </div>
 
-      <!-- AI Response Stream Output -->
-      <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-4 min-h-[110px] max-h-[180px] overflow-y-auto">
+      <!-- AI Response Output Stream -->
+      <div class="bg-gray-950/90 border border-gray-800 rounded-xl p-4 min-h-[100px] max-h-[160px] overflow-y-auto">
         <p id="aiStreamOutput" class="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">Hello Alex! I am your RecoverAI companion. I am here to listen and support your recovery reflections. How has your day been?</p>
       </div>
 
-      <!-- Chat Input & Quick Save -->
-      <div class="flex items-center gap-2">
-        <input type="text" id="textInput" placeholder="Type your daily reflection..." onkeydown="if(event.key==='Enter') sendMessage()" class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-teal-500 transition">
-        <button onclick="sendMessage()" class="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold rounded-xl transition flex items-center gap-1">
-          Send & Log
-        </button>
-      </div>
-    </div>
+      <!-- Single Input Bar & Dual Action Buttons (Conversational vs Log as Daily Reflection) -->
+      <div class="space-y-3 pt-1">
+        <input type="text" id="textInput" placeholder="Type your message or daily reflection log..." onkeydown="if(event.key==='Enter') sendMessage()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm text-gray-200 focus:outline-none focus:border-teal-500 transition">
 
-    <!-- Daily Log Reflection & Automated Sentiment Analysis Logger -->
-    <div class="glass rounded-2xl p-6 space-y-4 border border-cyan-500/30 bg-gradient-to-r from-gray-900 via-slate-900 to-gray-900">
-      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-        <div>
-          <h3 class="font-semibold text-gray-200 text-sm flex items-center gap-2">
-            📆 Log Reflection for Any Day (Automated Sentiment Analysis)
-          </h3>
-          <p class="text-xs text-gray-400 mt-0.5">Write your reflection note for today or a previous day. The system automatically performs sentiment analysis to evaluate tone and metrics.</p>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <!-- Normal Conversation Button -->
+          <button onclick="sendMessage()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center justify-center gap-1.5">
+            💬 Send Message (Normal Conversation)
+          </button>
+
+          <!-- Daily Reflection Logger Controls -->
+          <div class="flex items-center gap-2 flex-1 sm:justify-end">
+            <select id="multiDaysAgoSelect" class="bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-500">
+              <option value="0">Log for Today</option>
+              <option value="1">Log for Yesterday</option>
+              <option value="2">Log for 2 Days Ago</option>
+              <option value="3">Log for 3 Days Ago</option>
+              <option value="5">Log for 5 Days Ago</option>
+              <option value="7">Log for 7 Days Ago</option>
+              <option value="14">Log for 14 Days Ago</option>
+              <option value="30">Log for 30 Days Ago</option>
+            </select>
+
+            <button onclick="logAsDailyReflection()" class="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-1.5">
+              📊 Add this as my Daily Log
+            </button>
+          </div>
         </div>
-        <span class="text-[11px] text-cyan-400 font-bold bg-cyan-950/80 border border-cyan-800 px-3 py-1 rounded-xl">
-          Auto Sentiment Engine
-        </span>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-        <!-- Day / Date Selection -->
-        <div>
-          <label class="text-xs text-gray-300 font-medium block mb-1.5">Select Target Day</label>
-          <select id="multiDaysAgoSelect" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-500">
-            <option value="0">Today</option>
-            <option value="1">Yesterday (1 Day Ago)</option>
-            <option value="2">2 Days Ago</option>
-            <option value="3">3 Days Ago</option>
-            <option value="5">5 Days Ago</option>
-            <option value="7">7 Days Ago</option>
-            <option value="14">14 Days Ago</option>
-            <option value="30">30 Days Ago</option>
-          </select>
-        </div>
-
-        <!-- Reflection Journal Text Input -->
-        <div class="sm:col-span-2">
-          <label class="text-xs text-gray-300 font-medium block mb-1.5">Reflection Journal Log for Selected Day</label>
-          <input type="text" id="multiJournalText" placeholder="Write your reflection (e.g. 'Had a productive day, went for a 20 min walk after work...')" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-500">
-        </div>
-      </div>
-
-      <div class="flex justify-end pt-2">
-        <button onclick="submitMultiDayCheckin()" class="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-cyan-600/20 flex items-center gap-1.5">
-          📊 Log Entry & Analyze Sentiment
-        </button>
       </div>
     </div>
 
@@ -361,10 +326,10 @@
       if (ttsMuted) {
         window.speechSynthesis.cancel();
         icon.innerText = '🔇';
-        label.innerText = 'Voice Muted';
+        label.innerText = 'Audio Muted';
       } else {
         icon.innerText = '🔊';
-        label.innerText = 'Voice Audio ON';
+        label.innerText = 'Audio ON';
       }
     }
 
@@ -457,9 +422,10 @@
       }
     }
 
-    async function submitMultiDayCheckin() {
-      const daysAgo = parseInt(document.getElementById('multiDaysAgoSelect').value);
-      const journalText = document.getElementById('multiJournalText').value.trim() || `Daily reflection log for target day.`;
+    async function logAsDailyReflection() {
+      const input = document.getElementById('textInput');
+      const journalText = input.value.trim() || document.getElementById('aiStreamOutput').innerText || 'Daily Reflection Log';
+      const daysAgo = parseInt(document.getElementById('multiDaysAgoSelect').value) || 0;
 
       try {
         const res = await fetch('/v1/recovery/demo-checkin', {
@@ -474,8 +440,8 @@
         const data = await res.json();
         if (res.ok) {
           playAudioChime(600, 850);
-          alert(`✅ Daily Log & Sentiment Analyzed!\nDate: ${daysAgo === 0 ? 'Today' : daysAgo + ' Days Ago'}\nAutomated Sentiment: ${data.sentiment_label} (${data.sentiment_score > 0 ? '+' : ''}${data.sentiment_score})\nEmotional Tone: ${data.emotional_tone}`);
-          document.getElementById('multiJournalText').value = '';
+          alert(`✅ Daily Log Saved & Sentiment Analyzed!\nDate: ${daysAgo === 0 ? 'Today' : daysAgo + ' Days Ago'}\nAutomated Sentiment: ${data.sentiment_label} (${data.sentiment_score > 0 ? '+' : ''}${data.sentiment_score})\nEmotional Tone: ${data.emotional_tone}`);
+          input.value = '';
           loadHistory();
         } else {
           alert('Error saving daily log entry.');
