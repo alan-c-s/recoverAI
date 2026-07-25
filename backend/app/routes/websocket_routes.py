@@ -24,8 +24,8 @@ Rules:
 5. Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
 
 CANDIDATE_MODELS = [
+    "gemini-flash-lite-latest",
     "gemini-2.0-flash",
-    "gemini-1.5-flash",
     "gemini-2.0-flash-lite",
     "gemini-flash-latest"
 ]
