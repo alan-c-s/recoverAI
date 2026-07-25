@@ -32,6 +32,17 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
+class PatientProfileUploadRequest(BaseModel):
+    patient_id: Optional[str] = None
+    full_name: str
+    email: EmailStr
+    phone_number: Optional[str] = None
+    primary_challenge: Optional[str] = "Alcohol Use Disorder"
+    motivation: Optional[str] = None
+    triggers: Optional[str] = None
+    coping_strategies: Optional[str] = None
+    personal_background: Optional[str] = None
+
 # Check-in Schemas
 class CheckinCreate(BaseModel):
     mood_score: Optional[int] = Field(None, ge=1, le=10)

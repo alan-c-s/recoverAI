@@ -31,7 +31,7 @@
   </div>
 
   <!-- Header -->
-  <header class="border-b border-gray-800/80 bg-gray-900/60 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+  <header class="border-b border-gray-800/80 bg-gray-900/60 backdrop-blur-md px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sticky top-0 z-40">
     <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-teal-500/20">R</div>
       <div>
@@ -39,13 +39,19 @@
         <p class="text-xs text-teal-400 font-medium">Daily Reflection & Voice Companion</p>
       </div>
     </div>
-    <div class="flex items-center gap-3 text-xs sm:text-sm font-medium">
+
+    <div class="flex items-center gap-3 flex-wrap text-xs sm:text-sm font-medium">
+      <!-- Active Patient Selector -->
+      <div class="flex items-center gap-2">
+        <label class="text-gray-400 text-xs font-semibold">Active User Profile:</label>
+        <select id="patientSelector" onchange="switchPatientContext()" class="bg-gray-950 border border-teal-500/30 rounded-xl px-3 py-1.5 text-xs text-teal-300 font-bold focus:outline-none focus:border-teal-500">
+          <option value="00000000-0000-0000-0000-000000000001">Alex Carter</option>
+        </select>
+      </div>
+
       <button onclick="sendInstantAlert()" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-rose-600/30 flex items-center gap-1.5">
         🚨 Alert Caregiver Now
       </button>
-      <a href="tel:+15550192834" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1">
-        📞 Call Caregiver
-      </a>
       <a href="/caregiver" class="text-gray-400 hover:text-gray-200 transition">Caregiver Portal</a>
     </div>
   </header>
@@ -61,13 +67,13 @@
         <div>
           <div class="flex items-center gap-2 flex-wrap mb-1">
             <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-[11px] font-semibold">
-              📍 Live GPS Sentinel Active
+              🔒 Strict User Data Policy Active
             </span>
             <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold">
-              📊 Automated Log Sentiment Analysis Active
+              📊 Grounded AI Motivations Engine
             </span>
           </div>
-          <h2 class="text-xl font-bold text-gray-100">Alex's Daily Reflection Space</h2>
+          <h2 id="patientGreetingTitle" class="text-xl font-bold text-gray-100">Alex's Daily Reflection Space</h2>
         </div>
 
         <div class="flex items-center gap-3">
@@ -113,7 +119,7 @@
 
       <!-- AI Response Output Stream -->
       <div class="bg-gray-950/90 border border-gray-800 rounded-xl p-4 min-h-[100px] max-h-[160px] overflow-y-auto">
-        <p id="aiStreamOutput" class="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">Hello Alex! I am your RecoverAI companion. I am here to listen and support your recovery reflections. How has your day been?</p>
+        <p id="aiStreamOutput" class="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">Hello! I am your RecoverAI companion. I am here to listen and support your recovery reflections. How has your day been?</p>
       </div>
 
       <!-- Single Input Bar & Dual Action Buttons (Conversational vs Log as Daily Reflection) -->
@@ -154,7 +160,7 @@
           ⏱️ Daily Logs & Automated Sentiment Analysis Metrics (SQLite Database)
         </h3>
         <span class="text-xs text-cyan-400 font-medium flex items-center gap-1">
-          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Sentiment Tracking Active
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Grounded User Profile
         </span>
       </div>
       <div id="historyList" class="space-y-3 text-xs max-h-[300px] overflow-y-auto">
@@ -177,6 +183,7 @@
     let silenceTimer = null;
     const SILENCE_THRESHOLD_MS = 2000;
     let audioCtx = null;
+    let activePatientId = "00000000-0000-0000-0000-000000000001";
 
     function playAudioChime(freq1 = 520, freq2 = 650) {
       try {
@@ -195,6 +202,41 @@
         osc.start(now);
         osc.stop(now + 0.3);
       } catch(e) {}
+    }
+
+    async function loadPatientsList() {
+      try {
+        const res = await fetch('/v1/caregiver/patients');
+        if (!res.ok) return;
+        const patients = await res.json();
+        const select = document.getElementById('patientSelector');
+        if (patients.length) {
+          select.innerHTML = patients.map(p => `
+            <option value="${p.id}">${p.full_name}</option>
+          `).join('');
+          activePatientId = select.value;
+          updateGreetingTitle();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function switchPatientContext() {
+      const select = document.getElementById('patientSelector');
+      activePatientId = select.value;
+      updateGreetingTitle();
+      
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'set_patient', patient_id: activePatientId }));
+      }
+      loadHistory();
+    }
+
+    function updateGreetingTitle() {
+      const select = document.getElementById('patientSelector');
+      const selectedName = select.options[select.selectedIndex]?.text || "User";
+      document.getElementById('patientGreetingTitle').innerText = `${selectedName}'s Daily Reflection Space`;
     }
 
     function populateVoiceList() {
@@ -267,13 +309,10 @@
 
     function initWS() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/v1/ws/voice-chat`;
+      const wsUrl = `${protocol}//${window.location.host}/v1/ws/voice-chat?patient_id=${activePatientId}`;
       ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {
-        document.getElementById('wsStatus').innerText = '● Connected';
-        document.getElementById('wsStatus').className = 'text-xs text-emerald-400 font-medium';
-      };
+      ws.onopen = () => {};
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -288,8 +327,6 @@
       };
 
       ws.onclose = () => {
-        document.getElementById('wsStatus').innerText = '○ Reconnecting...';
-        document.getElementById('wsStatus').className = 'text-xs text-amber-400 font-medium';
         setTimeout(initWS, 3000);
       };
     }
@@ -357,7 +394,7 @@
       currentResponseText = '';
       document.getElementById('aiStreamOutput').innerText = '...';
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'text', content: text }));
+        ws.send(JSON.stringify({ type: 'text', content: text, patient_id: activePatientId }));
       }
       input.value = '';
     }
@@ -390,11 +427,15 @@
 
     async function dispatchAlert(latitude = null, longitude = null) {
       try {
-        const payload = latitude && longitude ? { latitude, longitude } : null;
+        const payload = {
+          patient_id: activePatientId,
+          latitude: latitude,
+          longitude: longitude
+        };
         const res = await fetch('/v1/recovery/instant-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: payload ? JSON.stringify(payload) : null
+          body: JSON.stringify(payload)
         });
 
         if (res.ok) {
@@ -432,6 +473,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            patient_id: activePatientId,
             days_ago: daysAgo,
             journal_text: journalText
           })
@@ -490,7 +532,7 @@
               
               <div class="text-gray-500 text-[10px] border-t border-gray-900 pt-1 flex items-center justify-between">
                 <span>AI Log Metric Evaluated</span>
-                <span>SQLite Verified ✓</span>
+                <span>SQLite Grounded ✓</span>
               </div>
             </div>
           `;
@@ -501,6 +543,7 @@
     }
 
     window.onload = () => {
+      loadPatientsList();
       initWS();
       loadHistory();
       if ('speechSynthesis' in window) {

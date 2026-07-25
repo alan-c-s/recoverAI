@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.future import select
 from google import genai
@@ -7,20 +8,22 @@ from google.genai import types
 
 from app.core.config import settings
 from app.database.session import AsyncSessionLocal
-from app.models.models import RecoveryCheckin, MemoryEmbedding
+from app.models.models import User, RecoveryCheckin, MemoryEmbedding
 from app.services.risk_engine import evaluate_risk
 
 logger = logging.getLogger("recoverai.ws")
 router = APIRouter(tags=["Voice & Chat WebSocket"])
 
+DEFAULT_PATIENT_ID = "00000000-0000-0000-0000-000000000001"
+
 BASE_SYSTEM_PROMPT = """You are RecoverAI, a supportive, warm, and highly expressive recovery companion.
 Your voice responses are read aloud using Text-to-Speech audio synthesis.
 
-Rules:
+STRICT DATA GROUNDING POLICY:
 1. Speak in a naturally expressive, comforting, and conversational tone.
-2. Use warm, natural phrasing with gentle pauses (commas/periods) for expressive speech synthesis pacing.
-3. Keep responses concise (2-3 sentences max).
-4. Use the patient's recovery journal history provided below to encourage them, celebrate their progress, and gently remind them of past coping strategies that worked for them (like walking or talking with Sarah).
+2. Keep responses concise (2-3 sentences max).
+3. Ground your responses strictly on the patient's personal background, core motivations, known triggers, and proven coping strategies provided below.
+4. Encourage the patient using their specific personal goals and past resilience strategies that worked for them.
 5. Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
 
 CANDIDATE_MODELS = [
@@ -39,34 +42,54 @@ def get_genai_client():
             logger.error(f"Error creating GenAI client: {str(e)}")
     return None
 
-async def fetch_patient_journal_context() -> str:
-    """Fetch recent recovery check-ins & RAG journal entries from SQLite to synthesize AI encouragement context."""
+async def fetch_patient_grounding_context(patient_id: str) -> str:
+    """Fetch patient profile, RAG memory embeddings, & checkin history strictly filtered by patient_id from SQLite."""
     try:
         async with AsyncSessionLocal() as db:
-            stmt = select(RecoveryCheckin).order_by(RecoveryCheckin.created_at.desc()).limit(5)
-            res = await db.execute(stmt)
-            checkins = res.scalars().all()
+            # 1. Fetch Patient User info
+            res_u = await db.execute(select(User).where(User.id == patient_id))
+            patient = res_u.scalars().first()
+            patient_name = patient.full_name if patient else "Patient"
 
-            if not checkins:
-                return "\n\nPATIENT JOURNAL HISTORY: New user starting their recovery journey today."
+            # 2. Fetch Grounding Memories (Motivations, Triggers, Coping Strategies)
+            res_m = await db.execute(
+                select(MemoryEmbedding).where(MemoryEmbedding.patient_id == patient_id).order_by(MemoryEmbedding.created_at.desc())
+            )
+            memories = res_m.scalars().all()
 
-            history_lines = []
-            for c in checkins:
-                sent = f" ({c.sentiment_label})" if c.sentiment_label else ""
-                line = f"- Log ({c.created_at.strftime('%b %d') if c.created_at else 'Recent'}){sent}: Reflection: '{c.journal_text}'"
-                history_lines.append(line)
+            # 3. Fetch Recent Checkins
+            res_c = await db.execute(
+                select(RecoveryCheckin).where(RecoveryCheckin.patient_id == patient_id).order_by(RecoveryCheckin.created_at.desc()).limit(5)
+            )
+            checkins = res_c.scalars().all()
 
-            context_str = "\n\nPATIENT RECOVERY JOURNAL HISTORY (From SQLite DB):\n" + "\n".join(history_lines)
-            context_str += "\nUse this journal history to personalize your response, remind them of past resilience, and encourage their ongoing progress."
-            return context_str
+            context_lines = [f"\n\nSTRICT GROUNDED DATA FOR PATIENT: {patient_name} (ID: {patient_id})"]
+
+            if memories:
+                context_lines.append("\nPERSONAL GROUNDING MEMORIES & RECOVERY PROFILE:")
+                for m in memories:
+                    context_lines.append(f"- [{m.memory_type.upper()}]: {m.content}")
+            else:
+                context_lines.append("\nPERSONAL GROUNDING MEMORIES: New patient record.")
+
+            if checkins:
+                context_lines.append("\nRECENT DAILY REFLECTIONS (SQLite DB):")
+                for c in checkins:
+                    sent = f" (Sentiment: {c.sentiment_label})" if c.sentiment_label else ""
+                    context_lines.append(f"- Check-in ({c.created_at.strftime('%b %d') if c.created_at else 'Recent'}){sent}: '{c.journal_text}'")
+            
+            context_lines.append("\nSTRICT INSTRUCTION: Ground your response strictly using this specific patient's personal background, motivations, and coping strategies.")
+            return "\n".join(context_lines)
     except Exception as e:
-        logger.error(f"Error fetching journal context from DB: {str(e)}")
+        logger.error(f"Error fetching patient grounding context from DB: {str(e)}")
         return ""
 
 @router.websocket("/ws/voice-chat")
-async def voice_chat_websocket(websocket: WebSocket):
+async def voice_chat_websocket(websocket: WebSocket, patient_id: Optional[str] = None):
     await websocket.accept()
     logger.info("WebSocket connection established.")
+
+    active_patient_id = patient_id or DEFAULT_PATIENT_ID
 
     try:
         while True:
@@ -74,6 +97,15 @@ async def voice_chat_websocket(websocket: WebSocket):
             message = json.loads(data)
             msg_type = message.get("type", "text")
             content = message.get("content", "")
+
+            # Support dynamic patient switching via WebSocket payload
+            if msg_type == "set_patient":
+                active_patient_id = message.get("patient_id", DEFAULT_PATIENT_ID)
+                await websocket.send_text(json.dumps({
+                    "type": "patient_updated",
+                    "patient_id": active_patient_id
+                }))
+                continue
 
             if msg_type == "end_session":
                 await websocket.send_text(json.dumps({"type": "session_ended"}))
@@ -101,9 +133,9 @@ async def voice_chat_websocket(websocket: WebSocket):
                 }))
                 continue
 
-            # Fetch patient journal history from SQLite to build context-aware encouragement prompt
-            journal_context = await fetch_patient_journal_context()
-            full_system_instruction = BASE_SYSTEM_PROMPT + journal_context
+            # Fetch patient grounding context strictly by active_patient_id
+            grounding_context = await fetch_patient_grounding_context(active_patient_id)
+            full_system_instruction = BASE_SYSTEM_PROMPT + grounding_context
 
             # Stream real-time AI response using Google Gemini API
             genai_client = get_genai_client()
