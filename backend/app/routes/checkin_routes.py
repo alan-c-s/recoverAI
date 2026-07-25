@@ -32,6 +32,28 @@ async def ensure_demo_users(db: AsyncSession):
         db.add(demo_patient)
         await db.commit()
 
+@router.post("/instant-alert")
+async def trigger_instant_caregiver_alert(db: AsyncSession = Depends(get_db)):
+    """Allows patient to manually alert their caregiver immediately."""
+    await ensure_demo_users(db)
+    
+    alert = RiskAlert(
+        patient_id=DEFAULT_PATIENT_ID,
+        risk_tier="High",
+        trigger_reason="🚨 PATIENT MANUAL ALERT: Patient explicitly requested immediate caregiver assistance from web app.",
+        status="Active",
+        is_acknowledged=False
+    )
+    db.add(alert)
+    await db.commit()
+    await db.refresh(alert)
+
+    return {
+        "status": "success",
+        "alert_id": str(alert.id),
+        "message": "Caregiver alert dispatched immediately to Caregiver Sentinel Portal."
+    }
+
 @router.post("/demo-checkin", status_code=status.HTTP_201_CREATED)
 async def submit_demo_checkin(
     checkin_data: CheckinCreate,
