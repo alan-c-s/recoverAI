@@ -8,7 +8,7 @@ from google.genai import types
 
 from app.core.config import settings
 from app.database.session import AsyncSessionLocal
-from app.models.models import User, RecoveryCheckin, MemoryEmbedding
+from app.models.models import User, RecoveryCheckin, MemoryEmbedding, DailyInteraction
 from app.services.risk_engine import evaluate_risk
 
 logger = logging.getLogger("recoverai.ws")
@@ -46,18 +46,15 @@ async def fetch_patient_grounding_context(patient_id: str) -> str:
     """Fetch patient profile, RAG memory embeddings, & checkin history strictly filtered by patient_id from SQLite."""
     try:
         async with AsyncSessionLocal() as db:
-            # 1. Fetch Patient User info
             res_u = await db.execute(select(User).where(User.id == patient_id))
             patient = res_u.scalars().first()
             patient_name = patient.full_name if patient else "Patient"
 
-            # 2. Fetch Grounding Memories (Motivations, Triggers, Coping Strategies)
             res_m = await db.execute(
                 select(MemoryEmbedding).where(MemoryEmbedding.patient_id == patient_id).order_by(MemoryEmbedding.created_at.desc())
             )
             memories = res_m.scalars().all()
 
-            # 3. Fetch Recent Checkins
             res_c = await db.execute(
                 select(RecoveryCheckin).where(RecoveryCheckin.patient_id == patient_id).order_by(RecoveryCheckin.created_at.desc()).limit(5)
             )
@@ -84,6 +81,20 @@ async def fetch_patient_grounding_context(patient_id: str) -> str:
         logger.error(f"Error fetching patient grounding context from DB: {str(e)}")
         return ""
 
+async def record_daily_interaction(patient_id: str, user_msg: str, ai_msg: str):
+    """Saves every interaction turn to SQLite daily_interactions table for end-of-day auto-summarization."""
+    try:
+        async with AsyncSessionLocal() as db:
+            interaction = DailyInteraction(
+                patient_id=patient_id,
+                user_message=user_msg,
+                ai_response=ai_msg
+            )
+            db.add(interaction)
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Error logging daily interaction turn: {str(e)}")
+
 @router.websocket("/ws/voice-chat")
 async def voice_chat_websocket(websocket: WebSocket, patient_id: Optional[str] = None):
     await websocket.accept()
@@ -98,7 +109,6 @@ async def voice_chat_websocket(websocket: WebSocket, patient_id: Optional[str] =
             msg_type = message.get("type", "text")
             content = message.get("content", "")
 
-            # Support dynamic patient switching via WebSocket payload
             if msg_type == "set_patient":
                 active_patient_id = message.get("patient_id", DEFAULT_PATIENT_ID)
                 await websocket.send_text(json.dumps({
@@ -131,6 +141,7 @@ async def voice_chat_websocket(websocket: WebSocket, patient_id: Optional[str] =
                     "type": "stream_complete",
                     "full_text": critical_msg
                 }))
+                await record_daily_interaction(active_patient_id, content, critical_msg)
                 continue
 
             # Fetch patient grounding context strictly by active_patient_id
@@ -175,6 +186,9 @@ async def voice_chat_websocket(websocket: WebSocket, patient_id: Optional[str] =
                     "type": "transcript_delta",
                     "delta": full_response
                 }))
+
+            # Record interaction turn into SQLite daily_interactions table
+            await record_daily_interaction(active_patient_id, content, full_response)
 
             # Signal stream complete so browser Speech Synthesis (TTS) can read aloud
             await websocket.send_text(json.dumps({

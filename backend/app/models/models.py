@@ -6,7 +6,6 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database.session import Base, is_sqlite
 
-# Handle UUID column type depending on DB dialect
 def UUIDColumn():
     return String(36) if is_sqlite else PG_UUID(as_uuid=True)
 
@@ -30,6 +29,7 @@ class User(Base):
     checkins = relationship("RecoveryCheckin", back_populates="patient", cascade="all, delete-orphan")
     memories = relationship("MemoryEmbedding", back_populates="patient", cascade="all, delete-orphan")
     risk_alerts = relationship("RiskAlert", foreign_keys="RiskAlert.patient_id", back_populates="patient", cascade="all, delete-orphan")
+    interactions = relationship("DailyInteraction", back_populates="patient", cascade="all, delete-orphan")
 
 class PatientCaregiverMap(Base):
     __tablename__ = "patient_caregiver_map"
@@ -58,6 +58,17 @@ class RecoveryCheckin(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     patient = relationship("User", back_populates="checkins")
+
+class DailyInteraction(Base):
+    __tablename__ = "daily_interactions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid_str)
+    patient_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_message = Column(Text, nullable=False)
+    ai_response = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    patient = relationship("User", back_populates="interactions")
 
 class MemoryEmbedding(Base):
     __tablename__ = "memory_embeddings"

@@ -66,7 +66,7 @@
         <div>
           <div class="flex items-center gap-2 flex-wrap mb-1">
             <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-[11px] font-semibold">
-              🔒 Strict User Data Grounding Active
+              🤖 Auto-Interaction Log Summarizer Active
             </span>
             <span id="patientIdBadge" class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold">
               ID: 00000000-0000-0000-0000-000000000001
@@ -152,16 +152,21 @@
       </div>
     </div>
 
-    <!-- Daily Log Sentiment History (SQLite Persistent DB) -->
+    <!-- Daily Log Sentiment History & Automated Conversation Summarizer -->
     <div class="glass rounded-2xl p-6 space-y-4">
-      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
-        <h3 class="font-semibold text-gray-200 text-sm flex items-center gap-2">
-          ⏱️ Daily Logs & Automated Sentiment Analysis Metrics (SQLite Database)
-        </h3>
-        <span class="text-xs text-cyan-400 font-medium flex items-center gap-1">
-          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Grounded User Profile
-        </span>
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-800 pb-3">
+        <div>
+          <h3 class="font-semibold text-gray-200 text-sm flex items-center gap-2">
+            ⏱️ Daily Reflection Logs & Sentiment Analysis (SQLite Database)
+          </h3>
+          <p class="text-[11px] text-gray-400 mt-0.5">If you haven't manually logged today, RecoverAI can auto-synthesize a reflection log from today's conversations!</p>
+        </div>
+
+        <button onclick="autoSummarizeToday()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center gap-1">
+          🤖 Auto-Generate Today's Reflection from Conversations
+        </button>
       </div>
+
       <div id="historyList" class="space-y-3 text-xs max-h-[300px] overflow-y-auto">
         <p class="text-gray-500 italic">Loading daily log sentiment metrics...</p>
       </div>
@@ -268,7 +273,6 @@
       updatePatientUI();
       toggleSwitchUserModal();
 
-      // Reconnect WebSocket with new patient_id
       if (ws) {
         ws.close();
       }
@@ -571,6 +575,31 @@
           loadHistory();
         } else {
           alert('Error saving daily log entry.');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function autoSummarizeToday() {
+      try {
+        const res = await fetch('/v1/recovery/auto-summarize-daily-interactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient_id: activePatientId })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          if (data.status === 'success') {
+            playAudioChime(650, 900);
+            alert(`🤖 Today's Conversations Auto-Summarized into Reflection Log!\nAutomated Sentiment: ${data.sentiment_label} (${data.sentiment_score > 0 ? '+' : ''}${data.sentiment_score})\nReflection: "${data.journal_text}"`);
+            loadHistory();
+          } else if (data.status === 'already_logged') {
+            alert(`ℹ️ Daily log for today already exists:\n"${data.journal_text}"`);
+          } else {
+            alert(`ℹ️ ${data.message}`);
+          }
         }
       } catch (e) {
         console.error(e);

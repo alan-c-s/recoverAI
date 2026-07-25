@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from google import genai
 
+from app.core.config import settings
 from app.database.session import get_db
-from app.models.models import User, RecoveryCheckin, RiskAlert
+from app.models.models import User, RecoveryCheckin, RiskAlert, DailyInteraction
 from app.schemas.schemas import CheckinCreate, CheckinResponse, RiskAlertResponse
 from app.auth.auth_handler import get_current_user
 from app.services.risk_engine import evaluate_risk
@@ -23,6 +25,9 @@ class LocationAlertRequest(BaseModel):
     patient_id: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+
+class AutoSummarizeRequest(BaseModel):
+    patient_id: Optional[str] = None
 
 async def ensure_demo_users(db: AsyncSession):
     """Ensure default patient exists in SQLite database."""
@@ -40,6 +45,108 @@ async def ensure_demo_users(db: AsyncSession):
         db.add(demo_patient)
         await db.commit()
 
+@router.post("/auto-summarize-daily-interactions")
+async def auto_summarize_daily_interactions(
+    req: Optional[AutoSummarizeRequest] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Automatically synthesizes a daily reflection log & sentiment metric from today's conversations if patient hasn't manually logged."""
+    await ensure_demo_users(db)
+    target_patient_id = (req and req.patient_id) or DEFAULT_PATIENT_ID
+
+    # 1. Check if patient already has a check-in logged today
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    res_exist = await db.execute(
+        select(RecoveryCheckin)
+        .where(RecoveryCheckin.patient_id == target_patient_id)
+        .where(RecoveryCheckin.created_at >= today_start)
+    )
+    existing_checkin = res_exist.scalars().first()
+    if existing_checkin:
+        return {
+            "status": "already_logged",
+            "message": "Daily reflection log for today already exists in database.",
+            "checkin_id": str(existing_checkin.id),
+            "journal_text": existing_checkin.journal_text,
+            "sentiment_label": existing_checkin.sentiment_label
+        }
+
+    # 2. Fetch today's interaction turns
+    res_inter = await db.execute(
+        select(DailyInteraction)
+        .where(DailyInteraction.patient_id == target_patient_id)
+        .where(DailyInteraction.created_at >= today_start)
+        .order_by(DailyInteraction.created_at.asc())
+    )
+    interactions = res_inter.scalars().all()
+
+    if not interactions:
+        return {
+            "status": "no_interactions",
+            "message": "No conversation turns recorded today yet to auto-summarize."
+        }
+
+    # 3. Combine conversation transcripts
+    transcript_lines = []
+    for inter in interactions:
+        if inter.user_message:
+            transcript_lines.append(f"Patient: {inter.user_message}")
+        if inter.ai_response:
+            transcript_lines.append(f"Companion: {inter.ai_response}")
+
+    full_transcript = "\n".join(transcript_lines)
+
+    # 4. Generate Daily Summary via Gemini or Fallback NLP
+    api_key = settings.effective_gemini_api_key
+    auto_summary_text = ""
+    if api_key:
+        try:
+            client = genai.Client(api_key=api_key)
+            prompt = f"Summarize the following patient's daily conversations into a 2-sentence empathetic daily recovery reflection log note written in first person:\n\n{full_transcript}"
+            res_sum = client.models.generate_content(
+                model="gemini-flash-lite-latest",
+                contents=prompt
+            )
+            if res_sum.text:
+                auto_summary_text = res_sum.text.strip()
+        except Exception:
+            pass
+
+    if not auto_summary_text:
+        # Fallback transcript aggregation
+        user_msgs = [i.user_message for i in interactions if i.user_message]
+        auto_summary_text = f"Auto-Generated Daily Reflection: Engaged in conversation turns today. Expressed: '{' '.join(user_msgs[:3])}'"
+
+    # 5. Automated Sentiment Analysis & Risk Evaluation
+    sent_res = analyze_log_sentiment(auto_summary_text)
+    risk_tier, risk_score, trigger_reason = evaluate_risk(journal_text=auto_summary_text)
+
+    # 6. Save Auto-Generated Daily Log to SQLite
+    auto_checkin = RecoveryCheckin(
+        patient_id=target_patient_id,
+        journal_text=f"🤖 [Auto-Generated from Conversations] {auto_summary_text}",
+        risk_tier=risk_tier,
+        risk_score=risk_score,
+        sentiment_label=sent_res["sentiment_label"],
+        sentiment_score=sent_res["sentiment_score"],
+        ai_summary=f"🤖 Auto-Synthesized Reflection ({sent_res['sentiment_label']})",
+        created_at=datetime.utcnow()
+    )
+    db.add(auto_checkin)
+    await db.commit()
+    await db.refresh(auto_checkin)
+
+    return {
+        "status": "success",
+        "message": "Automated daily reflection log & sentiment metric synthesized from today's interactions!",
+        "checkin_id": str(auto_checkin.id),
+        "journal_text": auto_checkin.journal_text,
+        "sentiment_label": sent_res["sentiment_label"],
+        "sentiment_score": sent_res["sentiment_score"],
+        "emotional_tone": sent_res["emotional_tone"],
+        "risk_tier": auto_checkin.risk_tier
+    }
+
 @router.post("/instant-alert")
 async def trigger_instant_caregiver_alert(
     loc: Optional[LocationAlertRequest] = None,
@@ -47,7 +154,6 @@ async def trigger_instant_caregiver_alert(
 ):
     """Allows patient to manually alert their caregiver immediately with HTML5 geolocation."""
     await ensure_demo_users(db)
-    
     target_patient_id = (loc and loc.patient_id) or DEFAULT_PATIENT_ID
 
     loc_str = ""
