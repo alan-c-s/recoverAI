@@ -1,21 +1,27 @@
 import json
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy.future import select
 from google import genai
 from google.genai import types
+
 from app.core.config import settings
+from app.database.session import AsyncSessionLocal
+from app.models.models import RecoveryCheckin, MemoryEmbedding
 from app.services.risk_engine import evaluate_risk
 
 logger = logging.getLogger("recoverai.ws")
 router = APIRouter(tags=["Voice & Chat WebSocket"])
 
-SYSTEM_PROMPT = """You are RecoverAI, a supportive, warm, and highly expressive recovery companion.
+BASE_SYSTEM_PROMPT = """You are RecoverAI, a supportive, warm, and highly expressive recovery companion.
 Your voice responses are read aloud using Text-to-Speech audio synthesis.
+
 Rules:
 1. Speak in a naturally expressive, comforting, and conversational tone.
 2. Use warm, natural phrasing with gentle pauses (commas/periods) for expressive speech synthesis pacing.
 3. Keep responses concise (2-3 sentences max).
-4. Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
+4. Use the patient's recovery journal history provided below to encourage them, celebrate their progress, and gently remind them of past coping strategies that worked for them.
+5. Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
 
 CANDIDATE_MODELS = [
     "gemini-1.5-flash",
@@ -31,6 +37,29 @@ def get_genai_client():
         except Exception as e:
             logger.error(f"Error creating GenAI client: {str(e)}")
     return None
+
+async def fetch_patient_journal_context() -> str:
+    """Fetch recent recovery check-ins & RAG journal entries from SQLite to synthesize AI encouragement context."""
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(RecoveryCheckin).order_by(RecoveryCheckin.created_at.desc()).limit(5)
+            res = await db.execute(stmt)
+            checkins = res.scalars().all()
+
+            if not checkins:
+                return "\n\nPATIENT JOURNAL HISTORY: New user starting their recovery journey today."
+
+            history_lines = []
+            for c in checkins:
+                line = f"- Check-in ({c.created_at.strftime('%b %d') if c.created_at else 'Recent'}): Mood {c.mood_score}/10, Craving {c.craving_level}/10. Reflection: '{c.journal_text}'"
+                history_lines.append(line)
+
+            context_str = "\n\nPATIENT RECOVERY JOURNAL HISTORY (From SQLite DB):\n" + "\n".join(history_lines)
+            context_str += "\nUse this journal history to personalize your response, remind them of past resilience, and encourage their ongoing progress."
+            return context_str
+    except Exception as e:
+        logger.error(f"Error fetching journal context from DB: {str(e)}")
+        return ""
 
 @router.websocket("/ws/voice-chat")
 async def voice_chat_websocket(websocket: WebSocket):
@@ -70,6 +99,10 @@ async def voice_chat_websocket(websocket: WebSocket):
                 }))
                 continue
 
+            # Fetch patient journal history from SQLite to build context-aware encouragement prompt
+            journal_context = await fetch_patient_journal_context()
+            full_system_instruction = BASE_SYSTEM_PROMPT + journal_context
+
             # Stream real-time AI response using Google Gemini API
             genai_client = get_genai_client()
             full_response = ""
@@ -82,7 +115,7 @@ async def voice_chat_websocket(websocket: WebSocket):
                             model=model_name,
                             contents=content,
                             config=types.GenerateContentConfig(
-                                system_instruction=SYSTEM_PROMPT
+                                system_instruction=full_system_instruction
                             )
                         )
                         for chunk in response_stream:
