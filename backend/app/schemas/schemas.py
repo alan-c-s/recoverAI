@@ -38,6 +38,8 @@ class CheckinCreate(BaseModel):
     craving_level: Optional[int] = Field(None, ge=0, le=10)
     journal_text: Optional[str] = None
     audio_file_url: Optional[str] = None
+    days_ago: Optional[int] = 0
+    date_str: Optional[str] = None
 
 class CheckinResponse(BaseModel):
     id: UUID

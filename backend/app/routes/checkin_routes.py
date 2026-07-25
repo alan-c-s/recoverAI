@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -76,7 +77,7 @@ async def submit_demo_checkin(
     checkin_data: CheckinCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Zero-auth demo endpoint to log check-ins, evaluate risk, save to SQLite, and trigger caregiver alerts."""
+    """Zero-auth demo endpoint to log check-ins (including multi-day past check-ins), evaluate risk, save to SQLite, and trigger caregiver alerts."""
     await ensure_demo_users(db)
 
     # 1. Evaluate Risk Tier
@@ -86,7 +87,17 @@ async def submit_demo_checkin(
         journal_text=checkin_data.journal_text
     )
 
-    # 2. Generate AI Feedback Summary
+    # 2. Determine Created Timestamp (supports multi-day past logging)
+    created_dt = datetime.utcnow()
+    if checkin_data.days_ago and checkin_data.days_ago > 0:
+        created_dt = datetime.utcnow() - timedelta(days=checkin_data.days_ago)
+    elif checkin_data.date_str:
+        try:
+            created_dt = datetime.fromisoformat(checkin_data.date_str)
+        except Exception:
+            pass
+
+    # 3. Generate AI Feedback Summary
     if risk_tier == "Critical":
         ai_summary = "CRITICAL ALERT: High distress detected. 988 Crisis Lifeline protocol activated and caregiver notified."
     elif risk_tier == "High":
@@ -96,22 +107,23 @@ async def submit_demo_checkin(
     else:
         ai_summary = "Great job completing your reflection! Keep up the momentum in your recovery journey."
 
-    # 3. Create Check-in Record in SQLite
+    # 4. Create Check-in Record in SQLite
     new_checkin = RecoveryCheckin(
         patient_id=DEFAULT_PATIENT_ID,
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
-        journal_text=checkin_data.journal_text or "Daily Voice Reflection",
+        journal_text=checkin_data.journal_text or "Daily Reflection",
         audio_file_url=checkin_data.audio_file_url,
         risk_tier=risk_tier,
         risk_score=risk_score,
-        ai_summary=ai_summary
+        ai_summary=ai_summary,
+        created_at=created_dt
     )
     db.add(new_checkin)
     await db.commit()
     await db.refresh(new_checkin)
 
-    # 4. Trigger Caregiver Alert if Medium/High/Critical
+    # 5. Trigger Caregiver Alert if Medium/High/Critical
     alert_triggered = False
     alert_id = None
     if risk_tier in ["Medium", "High", "Critical"]:
@@ -120,7 +132,8 @@ async def submit_demo_checkin(
             checkin_id=new_checkin.id,
             risk_tier=risk_tier,
             trigger_reason=trigger_reason or f"Elevated Craving Level ({checkin_data.craving_level}/10)",
-            is_acknowledged=False
+            is_acknowledged=False,
+            created_at=created_dt
         )
         db.add(alert)
         await db.commit()
@@ -128,7 +141,7 @@ async def submit_demo_checkin(
         alert_triggered = True
         alert_id = str(alert.id)
 
-    # 5. Extract & Save RAG Memory
+    # 6. Extract & Save RAG Memory
     if checkin_data.journal_text and len(checkin_data.journal_text.strip()) > 5:
         await save_memory(
             db=db,
@@ -153,7 +166,7 @@ async def submit_demo_checkin(
 @router.get("/demo-history")
 async def get_demo_history(db: AsyncSession = Depends(get_db)):
     """Fetch persistent check-ins history from SQLite."""
-    stmt = select(RecoveryCheckin).order_by(RecoveryCheckin.created_at.desc()).limit(20)
+    stmt = select(RecoveryCheckin).order_by(RecoveryCheckin.created_at.desc()).limit(50)
     result = await db.execute(stmt)
     checkins = result.scalars().all()
     return [
