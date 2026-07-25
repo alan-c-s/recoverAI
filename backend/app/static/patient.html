@@ -161,33 +161,14 @@
 
     </div>
 
-    <!-- Memory Search & History Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <!-- RAG Memory Search -->
-      <div class="glass rounded-2xl p-6 space-y-4">
-        <h3 class="font-semibold text-gray-200 text-sm border-b border-gray-800 pb-3 flex items-center gap-2">
-          🧠 Long-Term RAG Memory Search
-        </h3>
-        <div class="flex gap-2">
-          <input type="text" id="memoryQuery" placeholder="Search triggers, coping methods..." class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-500">
-          <button onclick="searchMemories()" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-semibold rounded-xl transition">Search</button>
-        </div>
-        <div id="memoryResults" class="space-y-2 text-xs">
-          <p class="text-gray-500 italic">No search executed yet.</p>
-        </div>
+    <!-- Persistent Reflection History -->
+    <div class="glass rounded-2xl p-6 space-y-4">
+      <h3 class="font-semibold text-gray-200 text-sm border-b border-gray-800 pb-3 flex items-center gap-2">
+        ⏱️ Saved Reflections (SQLite Database)
+      </h3>
+      <div id="historyList" class="space-y-2 text-xs max-h-[220px] overflow-y-auto">
+        <p class="text-gray-500 italic">Loading persistent reflections...</p>
       </div>
-
-      <!-- Reflection History -->
-      <div class="glass rounded-2xl p-6 space-y-4">
-        <h3 class="font-semibold text-gray-200 text-sm border-b border-gray-800 pb-3 flex items-center gap-2">
-          ⏱️ Saved Reflections (SQLite Database)
-        </h3>
-        <div id="historyList" class="space-y-2 text-xs max-h-[160px] overflow-y-auto">
-          <p class="text-gray-500 italic">Loading persistent reflections...</p>
-        </div>
-      </div>
-
     </div>
 
   </main>
@@ -473,18 +454,6 @@
       } catch (e) {
         console.error('Error loading history:', e);
       }
-    }
-
-    function searchMemories() {
-      const q = document.getElementById('memoryQuery').value;
-      const container = document.getElementById('memoryResults');
-      if (!q) return;
-      container.innerHTML = `
-        <div class="p-3 bg-gray-950 rounded-xl border border-gray-800 space-y-1">
-          <span class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 text-[10px] font-bold">COPING STRATEGY (RAG Memory)</span>
-          <p class="text-gray-300">When feeling '${q}', deep breathing and 15 min walks help reset perspective.</p>
-        </div>
-      `;
     }
 
     window.onload = () => {
