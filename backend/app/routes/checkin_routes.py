@@ -11,6 +11,7 @@ from app.models.models import User, RecoveryCheckin, RiskAlert
 from app.schemas.schemas import CheckinCreate, CheckinResponse, RiskAlertResponse
 from app.auth.auth_handler import get_current_user
 from app.services.risk_engine import evaluate_risk
+from app.services.sentiment_engine import analyze_log_sentiment
 from app.services.alert_service import trigger_caregiver_alert
 from app.services.rag_service import save_memory
 
@@ -77,17 +78,20 @@ async def submit_demo_checkin(
     checkin_data: CheckinCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Zero-auth demo endpoint to log check-ins (including multi-day past check-ins), evaluate risk, save to SQLite, and trigger caregiver alerts."""
+    """Zero-auth demo endpoint: performs automated sentiment analysis on logs, evaluates risk, and saves to SQLite."""
     await ensure_demo_users(db)
 
-    # 1. Evaluate Risk Tier
+    # 1. Automated Sentiment Analysis on Daily Log
+    sent_res = analyze_log_sentiment(checkin_data.journal_text)
+
+    # 2. Evaluate Risk Tier
     risk_tier, risk_score, trigger_reason = evaluate_risk(
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
         journal_text=checkin_data.journal_text
     )
 
-    # 2. Determine Created Timestamp (supports multi-day past logging)
+    # 3. Determine Created Timestamp
     created_dt = datetime.utcnow()
     if checkin_data.days_ago and checkin_data.days_ago > 0:
         created_dt = datetime.utcnow() - timedelta(days=checkin_data.days_ago)
@@ -97,25 +101,25 @@ async def submit_demo_checkin(
         except Exception:
             pass
 
-    # 3. Generate AI Feedback Summary
+    # 4. Generate AI Feedback Summary with Sentiment Metric
     if risk_tier == "Critical":
-        ai_summary = "CRITICAL ALERT: High distress detected. 988 Crisis Lifeline protocol activated and caregiver notified."
+        ai_summary = f"CRITICAL ALERT ({sent_res['sentiment_label']}): High distress detected. Crisis Lifeline protocol activated."
     elif risk_tier == "High":
-        ai_summary = "Elevated cravings/distress detected. Caregiver alert logged in SQLite database."
-    elif risk_tier == "Medium":
-        ai_summary = "Moderate risk check-in recorded. Grounding exercises recommended."
+        ai_summary = f"Elevated Risk ({sent_res['sentiment_label']}): Elevated distress detected in log."
     else:
-        ai_summary = "Great job completing your reflection! Keep up the momentum in your recovery journey."
+        ai_summary = f"Sentiment Analysis: {sent_res['sentiment_label']} ({sent_res['emotional_tone']}). Reflection recorded."
 
-    # 4. Create Check-in Record in SQLite
+    # 5. Create Check-in Record in SQLite
     new_checkin = RecoveryCheckin(
         patient_id=DEFAULT_PATIENT_ID,
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
-        journal_text=checkin_data.journal_text or "Daily Reflection",
+        journal_text=checkin_data.journal_text or "Daily Reflection Log",
         audio_file_url=checkin_data.audio_file_url,
         risk_tier=risk_tier,
         risk_score=risk_score,
+        sentiment_label=sent_res["sentiment_label"],
+        sentiment_score=sent_res["sentiment_score"],
         ai_summary=ai_summary,
         created_at=created_dt
     )
@@ -123,7 +127,7 @@ async def submit_demo_checkin(
     await db.commit()
     await db.refresh(new_checkin)
 
-    # 5. Trigger Caregiver Alert if Medium/High/Critical
+    # 6. Trigger Caregiver Alert if High/Critical
     alert_triggered = False
     alert_id = None
     if risk_tier in ["Medium", "High", "Critical"]:
@@ -131,7 +135,7 @@ async def submit_demo_checkin(
             patient_id=DEFAULT_PATIENT_ID,
             checkin_id=new_checkin.id,
             risk_tier=risk_tier,
-            trigger_reason=trigger_reason or f"Elevated Craving Level ({checkin_data.craving_level}/10)",
+            trigger_reason=trigger_reason or f"Log Sentiment: {sent_res['sentiment_label']}",
             is_acknowledged=False,
             created_at=created_dt
         )
@@ -141,21 +145,23 @@ async def submit_demo_checkin(
         alert_triggered = True
         alert_id = str(alert.id)
 
-    # 6. Extract & Save RAG Memory
+    # 7. Extract & Save RAG Memory
     if checkin_data.journal_text and len(checkin_data.journal_text.strip()) > 5:
         await save_memory(
             db=db,
             patient_id=DEFAULT_PATIENT_ID,
             memory_type="reflection",
             content=checkin_data.journal_text,
-            metadata={"mood": checkin_data.mood_score, "craving": checkin_data.craving_level}
+            metadata={"sentiment": sent_res["sentiment_label"], "score": sent_res["sentiment_score"]}
         )
 
     return {
         "status": "success",
         "checkin_id": str(new_checkin.id),
-        "mood_score": new_checkin.mood_score,
-        "craving_level": new_checkin.craving_level,
+        "journal_text": new_checkin.journal_text,
+        "sentiment_label": sent_res["sentiment_label"],
+        "sentiment_score": sent_res["sentiment_score"],
+        "emotional_tone": sent_res["emotional_tone"],
         "risk_tier": new_checkin.risk_tier,
         "ai_summary": new_checkin.ai_summary,
         "alert_triggered": alert_triggered,
@@ -165,22 +171,31 @@ async def submit_demo_checkin(
 
 @router.get("/demo-history")
 async def get_demo_history(db: AsyncSession = Depends(get_db)):
-    """Fetch persistent check-ins history from SQLite."""
+    """Fetch persistent check-ins history with automated sentiment analysis metrics from SQLite."""
     stmt = select(RecoveryCheckin).order_by(RecoveryCheckin.created_at.desc()).limit(50)
     result = await db.execute(stmt)
     checkins = result.scalars().all()
-    return [
-        {
+    
+    out = []
+    for c in checkins:
+        # Compute fallback sentiment if null
+        label = c.sentiment_label
+        score = c.sentiment_score
+        if not label:
+            analysis = analyze_log_sentiment(c.journal_text)
+            label = analysis["sentiment_label"]
+            score = analysis["sentiment_score"]
+
+        out.append({
             "id": str(c.id),
-            "mood_score": c.mood_score,
-            "craving_level": c.craving_level,
             "journal_text": c.journal_text,
+            "sentiment_label": label,
+            "sentiment_score": score,
             "risk_tier": c.risk_tier,
             "ai_summary": c.ai_summary,
             "created_at": c.created_at.isoformat() if c.created_at else ""
-        }
-        for c in checkins
-    ]
+        })
+    return out
 
 @router.post("/checkins", response_model=CheckinResponse, status_code=status.HTTP_201_CREATED)
 async def submit_checkin(
@@ -194,6 +209,7 @@ async def submit_checkin(
             detail="Only patient accounts can submit recovery check-ins."
         )
 
+    sent_res = analyze_log_sentiment(checkin_data.journal_text)
     risk_tier, risk_score, trigger_reason = evaluate_risk(
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
@@ -208,7 +224,9 @@ async def submit_checkin(
         audio_file_url=checkin_data.audio_file_url,
         risk_tier=risk_tier,
         risk_score=risk_score,
-        ai_summary="Reflection recorded."
+        sentiment_label=sent_res["sentiment_label"],
+        sentiment_score=sent_res["sentiment_score"],
+        ai_summary=f"Log Sentiment: {sent_res['sentiment_label']}"
     )
     db.add(new_checkin)
     await db.commit()

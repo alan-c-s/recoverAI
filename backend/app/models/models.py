@@ -52,6 +52,8 @@ class RecoveryCheckin(Base):
     audio_file_url = Column(String(512), nullable=True)
     risk_tier = Column(String(50), default="Low") # Low, Medium, High, Critical
     risk_score = Column(Float, default=0.0)
+    sentiment_label = Column(String(50), nullable=True, default="Neutral")
+    sentiment_score = Column(Float, nullable=True, default=0.0)
     ai_summary = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
