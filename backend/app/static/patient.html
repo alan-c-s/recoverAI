@@ -36,7 +36,7 @@
       <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-teal-500/20">R</div>
       <div>
         <h1 class="font-bold text-lg text-gray-100 tracking-tight">RecoverAI</h1>
-        <p class="text-xs text-teal-400 font-medium">Patient Recovery Companion</p>
+        <p class="text-xs text-teal-400 font-medium">Expressive Audio Companion</p>
       </div>
     </div>
     <div class="flex items-center gap-4 text-xs sm:text-sm font-medium">
@@ -53,10 +53,10 @@
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-semibold mb-2">
-            ✨ Voice Buffer: 2-Second Silence Auto-Send
+            🎭 Expressive Voice Synthesis & Sound Chimes Active
           </span>
-          <h2 class="text-2xl font-bold text-gray-100">Welcome to your safe reflection space</h2>
-          <p class="text-xs sm:text-sm text-gray-400 mt-1">Speak into the microphone. Pauses are accumulated smoothly and sent after 2 seconds of silence.</p>
+          <h2 class="text-2xl font-bold text-gray-100">Welcome to your expressive recovery space</h2>
+          <p class="text-xs sm:text-sm text-gray-400 mt-1">Customize expressive voice tone, pitch, and natural speech pacing below.</p>
         </div>
         <div class="flex items-center gap-2">
           <!-- Voice Mute Toggle -->
@@ -70,6 +70,29 @@
       </div>
     </div>
 
+    <!-- Expressive Audio Control Bar -->
+    <div class="glass rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 border border-teal-500/20 bg-teal-950/20">
+      <div class="flex items-center gap-2 text-xs font-semibold text-teal-300">
+        <span>🎙️ Expressive Voice Controls:</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-4 text-xs">
+        <div>
+          <label class="text-gray-400 text-[11px] block mb-1">Select Voice</label>
+          <select id="voiceSelect" class="bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-teal-500 max-w-[200px]">
+            <option value="">Default Natural Voice</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-gray-400 text-[11px] block mb-1">Expressive Pitch: <span id="pitchVal" class="text-teal-400 font-bold">1.0</span></label>
+          <input type="range" id="pitchSlider" min="0.6" max="1.4" step="0.05" value="1.0" oninput="document.getElementById('pitchVal').innerText = this.value" class="accent-teal-500 cursor-pointer w-28">
+        </div>
+        <div>
+          <label class="text-gray-400 text-[11px] block mb-1">Speaking Speed: <span id="rateVal" class="text-teal-400 font-bold">0.95</span></label>
+          <input type="range" id="rateSlider" min="0.7" max="1.3" step="0.05" value="0.95" oninput="document.getElementById('rateVal').innerText = this.value" class="accent-teal-500 cursor-pointer w-28">
+        </div>
+      </div>
+    </div>
+
     <!-- Companion Interactive Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
@@ -78,7 +101,7 @@
         <div class="flex items-center justify-between border-b border-gray-800 pb-3">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
-            <span class="font-semibold text-gray-200 text-sm">RecoverAI Interactive Companion</span>
+            <span class="font-semibold text-gray-200 text-sm">RecoverAI Expressive Companion</span>
           </div>
           <span id="wsStatus" class="text-xs text-emerald-400 font-medium">● Connected</span>
         </div>
@@ -180,38 +203,85 @@
     let ttsMuted = false;
     let currentResponseText = '';
     let silenceTimer = null;
-    const SILENCE_THRESHOLD_MS = 2000; // Reduced to 2 Seconds Silence Buffer
+    const SILENCE_THRESHOLD_MS = 2000; // 2 Seconds Silence Buffer
+    let audioCtx = null;
+
+    // Web Audio API Audio Chime Synthesizer
+    function playAudioChime(freq1 = 520, freq2 = 650) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq1, now);
+        osc.frequency.exponentialRampToValueAtTime(freq2, now + 0.15);
+        
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } catch(e) {
+        console.log('Audio chime unavailable', e);
+      }
+    }
+
+    // Populate Available Voices for Expressive TTS
+    function populateVoiceList() {
+      if (!('speechSynthesis' in window)) return;
+      const select = document.getElementById('voiceSelect');
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+
+      select.innerHTML = '<option value="">Default Natural Voice</option>';
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+      
+      englishVoices.forEach((voice, index) => {
+        const option = document.createElement('option');
+        option.value = voice.name;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        if (voice.name.includes('Natural') || voice.name.includes('Enhanced') || voice.name.includes('Google')) {
+          option.textContent = `⭐ ${option.textContent}`;
+        }
+        select.appendChild(option);
+      });
+    }
 
     // Initialize Web Speech Recognition API (Speech-to-Text)
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRec();
-      recognition.continuous = true; // Stay active during speech pauses
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
       recognition.onstart = () => {
         isRecording = true;
+        playAudioChime(440, 580); // Soft start recording chime
         updateMicUI(true, 'Listening... Speak freely');
       };
 
       recognition.onresult = (event) => {
         let fullTranscript = '';
-        // Always concatenate from index 0 to accumulate all phrases across pauses cleanly!
         for (let i = 0; i < event.results.length; i++) {
           fullTranscript += event.results[i][0].transcript;
         }
 
         if (fullTranscript.trim()) {
           document.getElementById('textInput').value = fullTranscript;
-          
-          // Reset 2-second silence timer on new speech input
           if (silenceTimer) clearTimeout(silenceTimer);
           updateMicUI(true, 'Listening... (Auto-sending after 2 seconds of silence)');
           
           silenceTimer = setTimeout(() => {
             if (isRecording) {
-              recognition.stop(); // Stops recognition and triggers auto-send onend
+              recognition.stop();
             }
           }, SILENCE_THRESHOLD_MS);
         }
@@ -223,6 +293,7 @@
         updateMicUI(false, 'Click microphone to speak');
         const text = document.getElementById('textInput').value.trim();
         if (text) {
+          playAudioChime(600, 480); // Soft end recording chime
           sendMessage();
         }
       };
@@ -264,22 +335,32 @@
       };
     }
 
-    // Text-to-Speech (TTS) Reader
+    // Expressive Text-to-Speech (TTS) Reader
     function speakText(text) {
       if (ttsMuted || !('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel(); // Stop any previous playback
+      window.speechSynthesis.cancel();
       
-      const cleanText = text.replace(/\[.*?\]/g, '').trim(); // Clean brackets
+      const cleanText = text.replace(/\[.*?\]/g, '').trim();
       if (!cleanText) return;
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.rate = 0.95; // Calm, clear pacing
-      utterance.pitch = 1.0;
       
-      // Select natural English voice if available
+      // Get User Expressive Controls
+      const pitchVal = parseFloat(document.getElementById('pitchSlider').value) || 1.0;
+      const rateVal = parseFloat(document.getElementById('rateSlider').value) || 0.95;
+      const selectedVoiceName = document.getElementById('voiceSelect').value;
+
+      utterance.pitch = pitchVal;
+      utterance.rate = rateVal;
+      
       const voices = window.speechSynthesis.getVoices();
-      const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
-      if (preferredVoice) utterance.voice = preferredVoice;
+      if (selectedVoiceName) {
+        const customVoice = voices.find(v => v.name === selectedVoiceName);
+        if (customVoice) utterance.voice = customVoice;
+      } else {
+        const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Enhanced') || v.name.includes('Google') || v.name.includes('Samantha')));
+        if (preferredVoice) utterance.voice = preferredVoice;
+      }
 
       window.speechSynthesis.speak(utterance);
     }
@@ -356,7 +437,6 @@
     }
 
     function submitCheckin() {
-      const text = document.getElementById('aiStreamOutput').innerText;
       const mood = document.getElementById('moodSlider').value;
       const craving = document.getElementById('cravingSlider').value;
       alert(`Daily reflection logged!\nMood: ${mood}/10 | Craving: ${craving}/10`);
@@ -386,7 +466,8 @@
     window.onload = () => {
       initWS();
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        populateVoiceList();
+        window.speechSynthesis.onvoiceschanged = populateVoiceList;
       }
     };
   </script>
