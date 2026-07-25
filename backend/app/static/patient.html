@@ -41,13 +41,12 @@
     </div>
 
     <div class="flex items-center gap-3 flex-wrap text-xs sm:text-sm font-medium">
-      <!-- Active Patient Selector -->
-      <div class="flex items-center gap-2">
-        <label class="text-gray-400 text-xs font-semibold">Active User Profile:</label>
-        <select id="patientSelector" onchange="switchPatientContext()" class="bg-gray-950 border border-teal-500/30 rounded-xl px-3 py-1.5 text-xs text-teal-300 font-bold focus:outline-none focus:border-teal-500">
-          <option value="00000000-0000-0000-0000-000000000001">Alex Carter</option>
-        </select>
-      </div>
+      <!-- Active Patient Login Button -->
+      <button onclick="toggleSwitchUserModal()" class="px-3.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-teal-300 font-bold rounded-xl border border-teal-500/30 transition flex items-center gap-1.5">
+        <span>👤 Logged in as:</span>
+        <span id="activeUserNameDisplay" class="text-white underline">Alex Carter</span>
+        <span class="text-[10px] text-gray-400">(Switch)</span>
+      </button>
 
       <button onclick="sendInstantAlert()" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-rose-600/30 flex items-center gap-1.5">
         🚨 Alert Caregiver Now
@@ -67,10 +66,10 @@
         <div>
           <div class="flex items-center gap-2 flex-wrap mb-1">
             <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-[11px] font-semibold">
-              🔒 Strict User Data Policy Active
+              🔒 Strict User Data Grounding Active
             </span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold">
-              📊 Grounded AI Motivations Engine
+            <span id="patientIdBadge" class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold">
+              ID: 00000000-0000-0000-0000-000000000001
             </span>
           </div>
           <h2 id="patientGreetingTitle" class="text-xl font-bold text-gray-100">Alex's Daily Reflection Space</h2>
@@ -170,6 +169,40 @@
 
   </main>
 
+  <!-- Switch Patient / Login Modal -->
+  <div id="switchUserModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass max-w-lg w-full rounded-2xl p-6 space-y-5 border border-teal-500/30 bg-gray-900 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+        <h3 class="font-bold text-gray-100 text-base">👤 Switch Active Patient / Log In</h3>
+        <button onclick="toggleSwitchUserModal()" class="text-gray-400 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+
+      <!-- List of Registered Patients in SQLite -->
+      <div class="space-y-2">
+        <label class="block text-gray-300 font-semibold text-xs">Select Registered Patient Account:</label>
+        <div id="patientsCardsContainer" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <p class="text-gray-500 italic text-xs">Loading patient database...</p>
+        </div>
+      </div>
+
+      <!-- Create / Register New Patient Form -->
+      <div class="border-t border-gray-800 pt-4 space-y-3">
+        <label class="block text-gray-300 font-semibold text-xs">Or Register / Log In as New Patient:</label>
+        <form onsubmit="handleQuickRegisterPatient(event)" class="space-y-3 text-xs">
+          <div>
+            <input type="text" id="quickName" required placeholder="Full Name (e.g. Sarah Jenkins)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-gray-200 focus:outline-none focus:border-teal-500">
+          </div>
+          <div>
+            <input type="email" id="quickEmail" required placeholder="Email Address (e.g. sarah@example.com)" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-gray-200 focus:outline-none focus:border-teal-500">
+          </div>
+          <button type="submit" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl transition shadow-lg shadow-teal-600/30">
+            ➕ Log In / Register Patient Account
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <footer class="border-t border-gray-900 py-4 text-center text-xs text-gray-500">
     RecoverAI Companion Platform &copy; 2026. Powered by Google Gemini AI.
   </footer>
@@ -183,7 +216,93 @@
     let silenceTimer = null;
     const SILENCE_THRESHOLD_MS = 2000;
     let audioCtx = null;
-    let activePatientId = "00000000-0000-0000-0000-000000000001";
+    
+    // Persistent Active Patient Session
+    let activePatientId = localStorage.getItem('recoverai_active_patient_id') || "00000000-0000-0000-0000-000000000001";
+    let activePatientName = localStorage.getItem('recoverai_active_patient_name') || "Alex Carter";
+
+    function toggleSwitchUserModal() {
+      const modal = document.getElementById('switchUserModal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        loadPatientsListForModal();
+      }
+    }
+
+    async function loadPatientsListForModal() {
+      try {
+        const res = await fetch('/v1/caregiver/patients');
+        if (!res.ok) return;
+        const patients = await res.json();
+        const container = document.getElementById('patientsCardsContainer');
+
+        if (!patients.length) {
+          container.innerHTML = `<p class="text-gray-500 italic text-xs">No registered patients found.</p>`;
+          return;
+        }
+
+        container.innerHTML = patients.map(p => `
+          <div onclick="selectPatientSession('${p.id}', '${p.full_name}')" class="p-3 rounded-xl border border-gray-800 bg-gray-950 hover:bg-slate-800 hover:border-teal-500 cursor-pointer flex items-center justify-between transition">
+            <div>
+              <p class="font-bold text-gray-200 text-xs">${p.full_name}</p>
+              <p class="text-gray-500 text-[10px]">${p.email}</p>
+            </div>
+            ${p.id === activePatientId ? `
+              <span class="px-2 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-800 text-[10px] font-bold">Active</span>
+            ` : `
+              <span class="text-gray-400 hover:text-teal-300 text-xs">Select &rarr;</span>
+            `}
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function selectPatientSession(id, name) {
+      activePatientId = id;
+      activePatientName = name;
+      localStorage.setItem('recoverai_active_patient_id', id);
+      localStorage.setItem('recoverai_active_patient_name', name);
+      
+      updatePatientUI();
+      toggleSwitchUserModal();
+
+      // Reconnect WebSocket with new patient_id
+      if (ws) {
+        ws.close();
+      }
+      initWS();
+      loadHistory();
+    }
+
+    async function handleQuickRegisterPatient(event) {
+      event.preventDefault();
+      const name = document.getElementById('quickName').value;
+      const email = document.getElementById('quickEmail').value;
+
+      try {
+        const res = await fetch('/v1/caregiver/patient', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full_name: name, email: email })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.patient_id) {
+          selectPatientSession(data.patient_id, name);
+          alert(`✅ Logged in as ${name}!`);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function updatePatientUI() {
+      document.getElementById('activeUserNameDisplay').innerText = activePatientName;
+      document.getElementById('patientGreetingTitle').innerText = `${activePatientName}'s Daily Reflection Space`;
+      document.getElementById('patientIdBadge').innerText = `ID: ${activePatientId.slice(0, 8)}...`;
+    }
 
     function playAudioChime(freq1 = 520, freq2 = 650) {
       try {
@@ -202,41 +321,6 @@
         osc.start(now);
         osc.stop(now + 0.3);
       } catch(e) {}
-    }
-
-    async function loadPatientsList() {
-      try {
-        const res = await fetch('/v1/caregiver/patients');
-        if (!res.ok) return;
-        const patients = await res.json();
-        const select = document.getElementById('patientSelector');
-        if (patients.length) {
-          select.innerHTML = patients.map(p => `
-            <option value="${p.id}">${p.full_name}</option>
-          `).join('');
-          activePatientId = select.value;
-          updateGreetingTitle();
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    function switchPatientContext() {
-      const select = document.getElementById('patientSelector');
-      activePatientId = select.value;
-      updateGreetingTitle();
-      
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'set_patient', patient_id: activePatientId }));
-      }
-      loadHistory();
-    }
-
-    function updateGreetingTitle() {
-      const select = document.getElementById('patientSelector');
-      const selectedName = select.options[select.selectedIndex]?.text || "User";
-      document.getElementById('patientGreetingTitle').innerText = `${selectedName}'s Daily Reflection Space`;
     }
 
     function populateVoiceList() {
@@ -482,7 +566,7 @@
         const data = await res.json();
         if (res.ok) {
           playAudioChime(600, 850);
-          alert(`✅ Daily Log Saved & Sentiment Analyzed!\nDate: ${daysAgo === 0 ? 'Today' : daysAgo + ' Days Ago'}\nAutomated Sentiment: ${data.sentiment_label} (${data.sentiment_score > 0 ? '+' : ''}${data.sentiment_score})\nEmotional Tone: ${data.emotional_tone}`);
+          alert(`✅ Daily Log Saved for ${activePatientName}!\nDate: ${daysAgo === 0 ? 'Today' : daysAgo + ' Days Ago'}\nAutomated Sentiment: ${data.sentiment_label} (${data.sentiment_score > 0 ? '+' : ''}${data.sentiment_score})\nEmotional Tone: ${data.emotional_tone}`);
           input.value = '';
           loadHistory();
         } else {
@@ -495,12 +579,12 @@
 
     async function loadHistory() {
       try {
-        const res = await fetch('/v1/recovery/demo-history');
+        const res = await fetch(`/v1/recovery/demo-history?patient_id=${activePatientId}`);
         if (!res.ok) return;
         const checkins = await res.json();
         const list = document.getElementById('historyList');
         if (!checkins.length) {
-          list.innerHTML = `<p class="text-gray-500 italic">No daily logs recorded in SQLite database yet.</p>`;
+          list.innerHTML = `<p class="text-gray-500 italic">No daily logs recorded in SQLite database for ${activePatientName} yet.</p>`;
           return;
         }
 
@@ -543,7 +627,7 @@
     }
 
     window.onload = () => {
-      loadPatientsList();
+      updatePatientUI();
       initWS();
       loadHistory();
       if ('speechSynthesis' in window) {

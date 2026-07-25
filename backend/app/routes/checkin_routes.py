@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -20,11 +20,12 @@ router = APIRouter(prefix="/recovery", tags=["Recovery & Check-ins"])
 DEFAULT_PATIENT_ID = "00000000-0000-0000-0000-000000000001"
 
 class LocationAlertRequest(BaseModel):
+    patient_id: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
 async def ensure_demo_users(db: AsyncSession):
-    """Ensure demo patient and caregiver exist in SQLite database."""
+    """Ensure default patient exists in SQLite database."""
     stmt = select(User).where(User.id == DEFAULT_PATIENT_ID)
     res = await db.execute(stmt)
     patient = res.scalars().first()
@@ -33,7 +34,7 @@ async def ensure_demo_users(db: AsyncSession):
             id=DEFAULT_PATIENT_ID,
             email="patient@example.com",
             hashed_password="demo_hash",
-            full_name="Demo Patient",
+            full_name="Alex Carter",
             role="patient"
         )
         db.add(demo_patient)
@@ -47,6 +48,8 @@ async def trigger_instant_caregiver_alert(
     """Allows patient to manually alert their caregiver immediately with HTML5 geolocation."""
     await ensure_demo_users(db)
     
+    target_patient_id = (loc and loc.patient_id) or DEFAULT_PATIENT_ID
+
     loc_str = ""
     if loc and loc.latitude and loc.longitude:
         maps_link = f"https://maps.google.com/?q={loc.latitude},{loc.longitude}"
@@ -57,7 +60,7 @@ async def trigger_instant_caregiver_alert(
     trigger_reason = f"🚨 PATIENT MANUAL ALERT: Immediate assistance requested.{loc_str}"
 
     alert = RiskAlert(
-        patient_id=DEFAULT_PATIENT_ID,
+        patient_id=target_patient_id,
         risk_tier="High",
         trigger_reason=trigger_reason,
         is_acknowledged=False
@@ -80,6 +83,7 @@ async def submit_demo_checkin(
 ):
     """Zero-auth demo endpoint: performs automated sentiment analysis on logs, evaluates risk, and saves to SQLite."""
     await ensure_demo_users(db)
+    target_patient_id = checkin_data.patient_id or DEFAULT_PATIENT_ID
 
     # 1. Automated Sentiment Analysis on Daily Log
     sent_res = analyze_log_sentiment(checkin_data.journal_text)
@@ -111,7 +115,7 @@ async def submit_demo_checkin(
 
     # 5. Create Check-in Record in SQLite
     new_checkin = RecoveryCheckin(
-        patient_id=DEFAULT_PATIENT_ID,
+        patient_id=target_patient_id,
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
         journal_text=checkin_data.journal_text or "Daily Reflection Log",
@@ -132,7 +136,7 @@ async def submit_demo_checkin(
     alert_id = None
     if risk_tier in ["Medium", "High", "Critical"]:
         alert = RiskAlert(
-            patient_id=DEFAULT_PATIENT_ID,
+            patient_id=target_patient_id,
             checkin_id=new_checkin.id,
             risk_tier=risk_tier,
             trigger_reason=trigger_reason or f"Log Sentiment: {sent_res['sentiment_label']}",
@@ -149,7 +153,7 @@ async def submit_demo_checkin(
     if checkin_data.journal_text and len(checkin_data.journal_text.strip()) > 5:
         await save_memory(
             db=db,
-            patient_id=DEFAULT_PATIENT_ID,
+            patient_id=target_patient_id,
             memory_type="reflection",
             content=checkin_data.journal_text,
             metadata={"sentiment": sent_res["sentiment_label"], "score": sent_res["sentiment_score"]}
@@ -170,15 +174,24 @@ async def submit_demo_checkin(
     }
 
 @router.get("/demo-history")
-async def get_demo_history(db: AsyncSession = Depends(get_db)):
-    """Fetch persistent check-ins history with automated sentiment analysis metrics from SQLite."""
-    stmt = select(RecoveryCheckin).order_by(RecoveryCheckin.created_at.desc()).limit(50)
+async def get_demo_history(
+    patient_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetch persistent check-ins history strictly for the selected patient from SQLite."""
+    target_patient_id = patient_id or DEFAULT_PATIENT_ID
+
+    stmt = (
+        select(RecoveryCheckin)
+        .where(RecoveryCheckin.patient_id == target_patient_id)
+        .order_by(RecoveryCheckin.created_at.desc())
+        .limit(50)
+    )
     result = await db.execute(stmt)
     checkins = result.scalars().all()
     
     out = []
     for c in checkins:
-        # Compute fallback sentiment if null
         label = c.sentiment_label
         score = c.sentiment_score
         if not label:

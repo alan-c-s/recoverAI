@@ -45,6 +45,7 @@ class PatientProfileUploadRequest(BaseModel):
 
 # Check-in Schemas
 class CheckinCreate(BaseModel):
+    patient_id: Optional[str] = None
     mood_score: Optional[int] = Field(None, ge=1, le=10)
     craving_level: Optional[int] = Field(None, ge=0, le=10)
     journal_text: Optional[str] = None
