@@ -30,7 +30,7 @@ async def ensure_demo_users(db: AsyncSession):
         demo_patient = User(
             id=DEFAULT_PATIENT_ID,
             email="patient@example.com",
-            password_hash="demo_hash",
+            hashed_password="demo_hash",
             full_name="Demo Patient",
             role="patient"
         )
