@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RecoverAI — Patient Recovery Companion</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #030712; color: #f3f4f6; }
+    .glass { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .pulse-ring { animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+  <!-- Emergency 988 Banner -->
+  <div class="bg-rose-950/90 border-b border-rose-800/60 text-rose-200 px-4 py-2 text-xs sm:text-sm font-medium flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+      <span>Immediate Crisis Support: Call or text <strong>988</strong> (Suicide & Crisis Lifeline - 24/7, Free)</span>
+    </div>
+    <a href="tel:988" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded font-bold text-xs transition">Call 988</a>
+  </div>
+
+  <!-- Header -->
+  <header class="border-b border-gray-800/80 bg-gray-900/60 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+    <div class="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white shadow-lg shadow-teal-500/20">
+        <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white text-lg">R</div>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg text-gray-100 tracking-tight">RecoverAI</h1>
+        <p class="text-xs text-teal-400 font-medium">Patient Recovery Companion</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-xs sm:text-sm font-medium">
+      <a href="/patient" class="text-teal-400 font-semibold">Patient Check-in</a>
+      <a href="/caregiver" class="text-gray-400 hover:text-gray-200 transition">Caregiver Portal</a>
+    </div>
+  </header>
+
+  <!-- Main Patient Dashboard -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- Hero Card -->
+    <div class="glass rounded-2xl p-6 relative overflow-hidden bg-gradient-to-r from-teal-950/40 via-gray-900 to-cyan-950/40">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-semibold mb-2">
+            ✨ Gemini AI Companion Active
+          </span>
+          <h2 class="text-2xl font-bold text-gray-100">Welcome to your safe reflection space</h2>
+          <p class="text-xs sm:text-sm text-gray-400 mt-1">Speak or type whatever is on your mind today.</p>
+        </div>
+        <div>
+          <span id="riskBadge" class="px-4 py-2 rounded-xl text-xs font-bold border border-emerald-600 bg-emerald-950/80 text-emerald-300 flex items-center gap-1.5">
+            🛡️ Risk Tier: Low
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Companion Interactive Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <!-- AI Stream Box -->
+      <div class="md:col-span-2 glass rounded-2xl p-6 flex flex-col justify-between space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
+            <span class="font-semibold text-gray-200 text-sm">RecoverAI Voice & Chat Stream</span>
+          </div>
+          <span id="wsStatus" class="text-xs text-emerald-400 font-medium">● Connected</span>
+        </div>
+
+        <!-- Mic Visualizer Circle -->
+        <div class="flex flex-col items-center justify-center py-6 bg-gray-950/60 rounded-xl border border-gray-800/80">
+          <button id="micBtn" onclick="toggleMic()" class="w-16 h-16 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20 transition transform active:scale-95">
+            <svg id="micIcon" class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+          </button>
+          <span id="micText" class="text-xs text-gray-400 mt-3 font-medium">Click microphone to speak</span>
+        </div>
+
+        <!-- AI Response Stream Output -->
+        <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-4 min-h-[110px] max-h-[180px] overflow-y-auto">
+          <p id="aiStreamOutput" class="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">Hello! I am your RecoverAI companion. How are you feeling today?</p>
+        </div>
+
+        <!-- Chat Input Form -->
+        <div class="flex items-center gap-2">
+          <input type="text" id="textInput" placeholder="Type how you are feeling..." onkeydown="if(event.key==='Enter') sendMessage()" class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-teal-500 transition">
+          <button onclick="sendMessage()" class="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold rounded-xl transition flex items-center gap-1">
+            Send
+          </button>
+        </div>
+      </div>
+
+      <!-- Self-Assessment Sliders -->
+      <div class="glass rounded-2xl p-6 space-y-6 flex flex-col justify-between">
+        <div>
+          <h3 class="font-semibold text-gray-200 text-sm border-b border-gray-800 pb-3 flex items-center gap-2">
+            ❤️ Daily Self-Assessment
+          </h3>
+          
+          <div class="space-y-4 mt-4">
+            <div>
+              <div class="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Mood Score</span>
+                <span id="moodVal" class="font-bold text-teal-400">7 / 10</span>
+              </div>
+              <input type="range" id="moodSlider" min="1" max="10" value="7" oninput="document.getElementById('moodVal').innerText = this.value + ' / 10'" class="w-full accent-teal-500 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Craving Level</span>
+                <span id="cravingVal" class="font-bold text-amber-400">2 / 10</span>
+              </div>
+              <input type="range" id="cravingSlider" min="0" max="10" value="2" oninput="document.getElementById('cravingVal').innerText = this.value + ' / 10'" class="w-full accent-amber-500 cursor-pointer">
+            </div>
+          </div>
+        </div>
+
+        <button onclick="submitCheckin()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-semibold rounded-xl border border-slate-700 transition">
+          Log Daily Reflection
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Memory Search & History Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- RAG Memory Search -->
+      <div class="glass rounded-2xl p-6 space-y-4">
+        <h3 class="font-semibold text-gray-200 text-sm border-b border-gray-800 pb-3 flex items-center gap-2">
+          🧠 Long-Term RAG Memory Search
+        </h3>
+        <div class="flex gap-2">
+          <input type="text" id="memoryQuery" placeholder="Search triggers, coping methods..." class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-500">
+          <button onclick="searchMemories()" class="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-semibold rounded-xl transition">Search</button>
+        </div>
+        <div id="memoryResults" class="space-y-2 text-xs">
+          <p class="text-gray-500 italic">No search executed yet.</p>
+        </div>
+      </div>
+
+      <!-- Reflection History -->
+      <div class="glass rounded-2xl p-6 space-y-4">
+        <h3 class="font-semibold text-gray-200 text-sm border-b border-gray-800 pb-3 flex items-center gap-2">
+          ⏱️ Today's Logged Reflections
+        </h3>
+        <div id="historyList" class="space-y-2 text-xs max-h-[160px] overflow-y-auto">
+          <p class="text-gray-500 italic">No reflections logged in current session.</p>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <footer class="border-t border-gray-900 py-4 text-center text-xs text-gray-500">
+    RecoverAI Companion Platform &copy; 2026. Powered by Google Gemini AI.
+  </footer>
+
+  <script>
+    let ws;
+    let isRecording = false;
+
+    function initWS() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/v1/ws/voice-chat`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById('wsStatus').innerText = '● Connected';
+        document.getElementById('wsStatus').className = 'text-xs text-emerald-400 font-medium';
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'transcript_delta') {
+          document.getElementById('aiStreamOutput').innerText += data.delta;
+        } else if (data.type === 'risk_update') {
+          updateRiskBadge(data.risk_tier);
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('wsStatus').innerText = '○ Reconnecting...';
+        document.getElementById('wsStatus').className = 'text-xs text-amber-400 font-medium';
+        setTimeout(initWS, 3000);
+      };
+    }
+
+    function updateRiskBadge(tier) {
+      const badge = document.getElementById('riskBadge');
+      if (tier === 'Critical') {
+        badge.className = 'px-4 py-2 rounded-xl text-xs font-bold border border-rose-600 bg-rose-950/90 text-rose-300 flex items-center gap-1.5';
+        badge.innerText = '⚠️ Risk Tier: CRITICAL';
+      } else if (tier === 'High') {
+        badge.className = 'px-4 py-2 rounded-xl text-xs font-bold border border-amber-600 bg-amber-950/90 text-amber-300 flex items-center gap-1.5';
+        badge.innerText = '⚡ Risk Tier: HIGH';
+      } else if (tier === 'Medium') {
+        badge.className = 'px-4 py-2 rounded-xl text-xs font-bold border border-yellow-600 bg-yellow-950/90 text-yellow-300 flex items-center gap-1.5';
+        badge.innerText = '⚡ Risk Tier: MEDIUM';
+      } else {
+        badge.className = 'px-4 py-2 rounded-xl text-xs font-bold border border-emerald-600 bg-emerald-950/80 text-emerald-300 flex items-center gap-1.5';
+        badge.innerText = '🛡️ Risk Tier: Low';
+      }
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('textInput');
+      const text = input.value.trim();
+      if (!text) return;
+      
+      document.getElementById('aiStreamOutput').innerText = '';
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'text', content: text }));
+      }
+      addHistoryItem(text);
+      input.value = '';
+    }
+
+    function toggleMic() {
+      isRecording = !isRecording;
+      const btn = document.getElementById('micBtn');
+      const text = document.getElementById('micText');
+      if (isRecording) {
+        btn.className = 'w-16 h-16 rounded-full bg-teal-500 text-white flex items-center justify-center pulse-ring shadow-lg shadow-teal-500/50';
+        text.innerText = 'Listening to voice input...';
+      } else {
+        btn.className = 'w-16 h-16 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20';
+        text.innerText = 'Click microphone to speak';
+      }
+    }
+
+    function submitCheckin() {
+      const text = document.getElementById('aiStreamOutput').innerText;
+      const mood = document.getElementById('moodSlider').value;
+      const craving = document.getElementById('cravingSlider').value;
+      alert(`Daily reflection logged!\nMood: ${mood}/10 | Craving: ${craving}/10`);
+    }
+
+    function searchMemories() {
+      const q = document.getElementById('memoryQuery').value;
+      const container = document.getElementById('memoryResults');
+      if (!q) return;
+      container.innerHTML = `
+        <div class="p-3 bg-gray-950 rounded-xl border border-gray-800 space-y-1">
+          <span class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 text-[10px] font-bold">COPING STRATEGY</span>
+          <p class="text-gray-300">When feeling '${q}', deep breathing and 15 min walks help reset perspective.</p>
+        </div>
+      `;
+    }
+
+    function addHistoryItem(text) {
+      const list = document.getElementById('historyList');
+      if (list.innerHTML.includes('No reflections')) list.innerHTML = '';
+      const item = document.createElement('div');
+      item.className = 'p-2.5 bg-gray-950 border border-gray-800 rounded-xl flex items-center justify-between text-xs';
+      item.innerHTML = `<span class="text-gray-300 truncate max-w-[240px]">${text}</span><span class="text-gray-500 text-[10px]">${new Date().toLocaleTimeString()}</span>`;
+      list.prepend(item);
+    }
+
+    window.onload = initWS;
+  </script>
+</body>
+</html>
