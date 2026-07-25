@@ -1,20 +1,26 @@
 import json
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.core.config import settings
 from app.services.risk_engine import evaluate_risk
 
 logger = logging.getLogger("recoverai.ws")
 router = APIRouter(tags=["Voice & Chat WebSocket"])
 
-if settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-
 SYSTEM_PROMPT = """You are RecoverAI, a supportive, empathetic, and trauma-informed recovery companion.
 Your goal is to support users in their addiction recovery, mental health, or post-medical rehabilitation.
 Keep responses warm, encouraging, non-judgmental, active-listening, and concise (2-3 sentences max).
 Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
+
+def get_genai_client():
+    if settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
+        try:
+            return genai.Client(api_key=settings.GEMINI_API_KEY)
+        except Exception as e:
+            logger.error(f"Error creating GenAI client: {str(e)}")
+    return None
 
 @router.websocket("/ws/voice-chat")
 async def voice_chat_websocket(websocket: WebSocket):
@@ -54,16 +60,21 @@ async def voice_chat_websocket(websocket: WebSocket):
                 }))
                 continue
 
-            # Stream response using Gemini API if key is present
+            # Stream real-time AI response using Google Gemini API
+            genai_client = get_genai_client()
             full_response = ""
-            if settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
+
+            if genai_client:
                 try:
-                    model = genai.GenerativeModel(
-                        model_name="gemini-1.5-flash",
-                        system_instruction=SYSTEM_PROMPT
+                    # Stream response using Gemini 2.0 Flash / 1.5 Flash
+                    response_stream = genai_client.models.generate_content_stream(
+                        model="gemini-2.0-flash",
+                        contents=content,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT
+                        )
                     )
-                    response = model.generate_content(content, stream=True)
-                    for chunk in response:
+                    for chunk in response_stream:
                         if chunk.text:
                             full_response += chunk.text
                             await websocket.send_text(json.dumps({
@@ -72,19 +83,35 @@ async def voice_chat_websocket(websocket: WebSocket):
                             }))
                 except Exception as e:
                     logger.error(f"Error streaming Gemini response: {str(e)}")
-                    fallback = "I'm listening and right here with you. How are you feeling right now?"
-                    full_response = fallback
-                    await websocket.send_text(json.dumps({
-                        "type": "transcript_delta",
-                        "delta": fallback
-                    }))
+                    # Fallback to gemini-1.5-flash if 2.0-flash model name differs
+                    try:
+                        response_stream = genai_client.models.generate_content_stream(
+                            model="gemini-1.5-flash",
+                            contents=content,
+                            config=types.GenerateContentConfig(
+                                system_instruction=SYSTEM_PROMPT
+                            )
+                        )
+                        for chunk in response_stream:
+                            if chunk.text:
+                                full_response += chunk.text
+                                await websocket.send_text(json.dumps({
+                                    "type": "transcript_delta",
+                                    "delta": chunk.text
+                                }))
+                    except Exception as e2:
+                        logger.error(f"Error with fallback Gemini model: {str(e2)}")
+                        full_response = f"I hear you sharing: '{content}'. Thank you for opening up. How can I best support your recovery journey today?"
+                        await websocket.send_text(json.dumps({
+                            "type": "transcript_delta",
+                            "delta": full_response
+                        }))
             else:
-                # Fallback response if GEMINI_API_KEY is not entered yet
-                fallback = f"I hear you sharing: '{content}'. Thank you for opening up. How can I best support your recovery journey today?"
-                full_response = fallback
+                # Key is placeholder or missing
+                full_response = f"I hear you sharing: '{content}'. Thank you for opening up. To enable live Gemini AI responses, please add your GEMINI_API_KEY to backend/.env."
                 await websocket.send_text(json.dumps({
                     "type": "transcript_delta",
-                    "delta": fallback
+                    "delta": full_response
                 }))
 
             # Signal stream complete so browser Speech Synthesis (TTS) can read aloud

@@ -4,30 +4,34 @@ import numpy as np
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 from app.models.models import MemoryEmbedding
 
 logger = logging.getLogger("recoverai.rag")
 
-if settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-
-async def generate_embedding(text: str) -> List[float]:
-    # 1. Try Gemini API Embedding first if key configured
+def get_genai_client():
     if settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
         try:
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=text,
-                task_type="retrieval_document"
+            return genai.Client(api_key=settings.GEMINI_API_KEY)
+        except Exception as e:
+            logger.error(f"Error creating GenAI client: {str(e)}")
+    return None
+
+async def generate_embedding(text: str) -> List[float]:
+    client = get_genai_client()
+    if client:
+        try:
+            result = client.models.embed_content(
+                model="text-embedding-004",
+                contents=text
             )
-            return result['embedding']
+            return result.embedding.values
         except Exception as e:
             logger.error(f"Error generating Gemini embedding: {str(e)}")
 
-    # 2. Fallback to zero-vector if key is missing or errored
     logger.info("Using zero-vector fallback for embeddings.")
     return [0.0] * 768
 
