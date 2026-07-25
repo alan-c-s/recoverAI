@@ -7,6 +7,7 @@ from typing import List
 from app.database.session import get_db
 from app.models.models import User, PatientCaregiverMap, RiskAlert, RecoveryCheckin
 from app.schemas.schemas import RiskAlertResponse, AlertAcknowledgeRequest
+from app.auth.auth_handler import get_current_user
 
 router = APIRouter(prefix="/caregiver", tags=["Caregiver Portal"])
 
