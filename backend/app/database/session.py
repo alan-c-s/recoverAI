@@ -11,12 +11,11 @@ if is_sqlite:
 engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
 Base = declarative_base()
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -24,6 +23,7 @@ async def get_db():
             yield session
         finally:
             await session.close()
+
 
 async def init_db():
     """Auto-creates tables for SQLite or dev setup."""

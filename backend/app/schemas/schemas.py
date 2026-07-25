@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
+
 
 # User Schemas
 class UserRegister(BaseModel):
@@ -11,9 +12,11 @@ class UserRegister(BaseModel):
     role: str = Field("patient", pattern="^(patient|caregiver)$")
     phone_number: Optional[str] = None
 
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
 
 class UserResponse(BaseModel):
     id: UUID
@@ -26,10 +29,12 @@ class UserResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
 
 class PatientProfileUploadRequest(BaseModel):
     patient_id: Optional[str] = None
@@ -42,6 +47,7 @@ class PatientProfileUploadRequest(BaseModel):
     coping_strategies: Optional[str] = None
     personal_background: Optional[str] = None
 
+
 # Check-in Schemas
 class CheckinCreate(BaseModel):
     patient_id: Optional[str] = None
@@ -51,6 +57,7 @@ class CheckinCreate(BaseModel):
     audio_file_url: Optional[str] = None
     days_ago: Optional[int] = 0
     date_str: Optional[str] = None
+
 
 class CheckinResponse(BaseModel):
     id: UUID
@@ -65,11 +72,13 @@ class CheckinResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # Memory Schemas
 class MemoryCreate(BaseModel):
-    memory_type: str # 'trigger', 'coping_strategy', 'milestone', 'reflection'
+    memory_type: str  # 'trigger', 'coping_strategy', 'milestone', 'reflection'
     content: str
     metadata: Optional[Dict[str, Any]] = {}
+
 
 class MemoryResponse(BaseModel):
     id: UUID
@@ -80,6 +89,7 @@ class MemoryResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 # Alert Schemas
 class RiskAlertResponse(BaseModel):
@@ -93,6 +103,7 @@ class RiskAlertResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class AlertAcknowledgeRequest(BaseModel):
     alert_id: UUID

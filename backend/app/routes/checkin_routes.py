@@ -1,6 +1,5 @@
-import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +9,7 @@ from google import genai
 from app.core.config import settings
 from app.database.session import get_db
 from app.models.models import User, RecoveryCheckin, RiskAlert, DailyInteraction
-from app.schemas.schemas import CheckinCreate, CheckinResponse, RiskAlertResponse
+from app.schemas.schemas import CheckinCreate
 from app.auth.auth_handler import get_current_user
 from app.services.risk_engine import evaluate_risk
 from app.services.sentiment_engine import analyze_log_sentiment
@@ -21,13 +20,16 @@ router = APIRouter(prefix="/recovery", tags=["Recovery & Check-ins"])
 
 DEFAULT_PATIENT_ID = "00000000-0000-0000-0000-000000000001"
 
+
 class LocationAlertRequest(BaseModel):
     patient_id: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+
 class AutoSummarizeRequest(BaseModel):
     patient_id: Optional[str] = None
+
 
 async def ensure_demo_users(db: AsyncSession):
     """Ensure default patient exists in SQLite database."""
@@ -40,22 +42,25 @@ async def ensure_demo_users(db: AsyncSession):
             email="patient@example.com",
             hashed_password="demo_hash",
             full_name="Alex Carter",
-            role="patient"
+            role="patient",
         )
         db.add(demo_patient)
         await db.commit()
 
+
 @router.post("/auto-summarize-daily-interactions")
 async def auto_summarize_daily_interactions(
     req: Optional[AutoSummarizeRequest] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Automatically synthesizes a daily reflection log & sentiment metric from today's conversations if patient hasn't manually logged."""
     await ensure_demo_users(db)
     target_patient_id = (req and req.patient_id) or DEFAULT_PATIENT_ID
 
     # 1. Check if patient already has a check-in logged today
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.utcnow().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
     res_exist = await db.execute(
         select(RecoveryCheckin)
         .where(RecoveryCheckin.patient_id == target_patient_id)
@@ -68,7 +73,7 @@ async def auto_summarize_daily_interactions(
             "message": "Daily reflection log for today already exists in database.",
             "checkin_id": str(existing_checkin.id),
             "journal_text": existing_checkin.journal_text,
-            "sentiment_label": existing_checkin.sentiment_label
+            "sentiment_label": existing_checkin.sentiment_label,
         }
 
     # 2. Fetch today's interaction turns
@@ -83,7 +88,7 @@ async def auto_summarize_daily_interactions(
     if not interactions:
         return {
             "status": "no_interactions",
-            "message": "No conversation turns recorded today yet to auto-summarize."
+            "message": "No conversation turns recorded today yet to auto-summarize.",
         }
 
     # 3. Combine conversation transcripts
@@ -104,8 +109,7 @@ async def auto_summarize_daily_interactions(
             client = genai.Client(api_key=api_key)
             prompt = f"Summarize the following patient's daily conversations into a 2-sentence empathetic daily recovery reflection log note written in first person:\n\n{full_transcript}"
             res_sum = client.models.generate_content(
-                model="gemini-flash-lite-latest",
-                contents=prompt
+                model="gemini-flash-lite-latest", contents=prompt
             )
             if res_sum.text:
                 auto_summary_text = res_sum.text.strip()
@@ -119,7 +123,9 @@ async def auto_summarize_daily_interactions(
 
     # 5. Automated Sentiment Analysis & Risk Evaluation
     sent_res = analyze_log_sentiment(auto_summary_text)
-    risk_tier, risk_score, trigger_reason = evaluate_risk(journal_text=auto_summary_text)
+    risk_tier, risk_score, trigger_reason = evaluate_risk(
+        journal_text=auto_summary_text
+    )
 
     # 6. Save Auto-Generated Daily Log to SQLite
     auto_checkin = RecoveryCheckin(
@@ -130,7 +136,7 @@ async def auto_summarize_daily_interactions(
         sentiment_label=sent_res["sentiment_label"],
         sentiment_score=sent_res["sentiment_score"],
         ai_summary=f"🤖 Auto-Synthesized Reflection ({sent_res['sentiment_label']})",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
     db.add(auto_checkin)
     await db.commit()
@@ -144,13 +150,14 @@ async def auto_summarize_daily_interactions(
         "sentiment_label": sent_res["sentiment_label"],
         "sentiment_score": sent_res["sentiment_score"],
         "emotional_tone": sent_res["emotional_tone"],
-        "risk_tier": auto_checkin.risk_tier
+        "risk_tier": auto_checkin.risk_tier,
     }
+
 
 @router.post("/instant-alert")
 async def trigger_instant_caregiver_alert(
     loc: Optional[LocationAlertRequest] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Allows patient to manually alert their caregiver immediately with HTML5 geolocation."""
     await ensure_demo_users(db)
@@ -163,13 +170,15 @@ async def trigger_instant_caregiver_alert(
     else:
         loc_str = " 📍 Location: Shared from Patient Companion Web App"
 
-    trigger_reason = f"🚨 PATIENT MANUAL ALERT: Immediate assistance requested.{loc_str}"
+    trigger_reason = (
+        f"🚨 PATIENT MANUAL ALERT: Immediate assistance requested.{loc_str}"
+    )
 
     alert = RiskAlert(
         patient_id=target_patient_id,
         risk_tier="High",
         trigger_reason=trigger_reason,
-        is_acknowledged=False
+        is_acknowledged=False,
     )
     db.add(alert)
     await db.commit()
@@ -179,13 +188,13 @@ async def trigger_instant_caregiver_alert(
         "status": "success",
         "alert_id": str(alert.id),
         "trigger_reason": trigger_reason,
-        "message": "Caregiver alert dispatched immediately to Caregiver Sentinel Portal."
+        "message": "Caregiver alert dispatched immediately to Caregiver Sentinel Portal.",
     }
+
 
 @router.post("/demo-checkin", status_code=status.HTTP_201_CREATED)
 async def submit_demo_checkin(
-    checkin_data: CheckinCreate,
-    db: AsyncSession = Depends(get_db)
+    checkin_data: CheckinCreate, db: AsyncSession = Depends(get_db)
 ):
     """Zero-auth demo endpoint: performs automated sentiment analysis on logs, evaluates risk, and saves to SQLite."""
     await ensure_demo_users(db)
@@ -198,7 +207,7 @@ async def submit_demo_checkin(
     risk_tier, risk_score, trigger_reason = evaluate_risk(
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
-        journal_text=checkin_data.journal_text
+        journal_text=checkin_data.journal_text,
     )
 
     # 3. Determine Created Timestamp
@@ -231,7 +240,7 @@ async def submit_demo_checkin(
         sentiment_label=sent_res["sentiment_label"],
         sentiment_score=sent_res["sentiment_score"],
         ai_summary=ai_summary,
-        created_at=created_dt
+        created_at=created_dt,
     )
     db.add(new_checkin)
     await db.commit()
@@ -245,9 +254,10 @@ async def submit_demo_checkin(
             patient_id=target_patient_id,
             checkin_id=new_checkin.id,
             risk_tier=risk_tier,
-            trigger_reason=trigger_reason or f"Log Sentiment: {sent_res['sentiment_label']}",
+            trigger_reason=trigger_reason
+            or f"Log Sentiment: {sent_res['sentiment_label']}",
             is_acknowledged=False,
-            created_at=created_dt
+            created_at=created_dt,
         )
         db.add(alert)
         await db.commit()
@@ -262,7 +272,10 @@ async def submit_demo_checkin(
             patient_id=target_patient_id,
             memory_type="reflection",
             content=checkin_data.journal_text,
-            metadata={"sentiment": sent_res["sentiment_label"], "score": sent_res["sentiment_score"]}
+            metadata={
+                "sentiment": sent_res["sentiment_label"],
+                "score": sent_res["sentiment_score"],
+            },
         )
 
     return {
@@ -276,13 +289,13 @@ async def submit_demo_checkin(
         "ai_summary": new_checkin.ai_summary,
         "alert_triggered": alert_triggered,
         "alert_id": alert_id,
-        "created_at": new_checkin.created_at.isoformat()
+        "created_at": new_checkin.created_at.isoformat(),
     }
+
 
 @router.get("/demo-history")
 async def get_demo_history(
-    patient_id: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db)
+    patient_id: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)
 ):
     """Fetch persistent check-ins history strictly for the selected patient from SQLite."""
     target_patient_id = patient_id or DEFAULT_PATIENT_ID
@@ -295,7 +308,7 @@ async def get_demo_history(
     )
     result = await db.execute(stmt)
     checkins = result.scalars().all()
-    
+
     out = []
     for c in checkins:
         label = c.sentiment_label
@@ -305,34 +318,39 @@ async def get_demo_history(
             label = analysis["sentiment_label"]
             score = analysis["sentiment_score"]
 
-        out.append({
-            "id": str(c.id),
-            "journal_text": c.journal_text,
-            "sentiment_label": label,
-            "sentiment_score": score,
-            "risk_tier": c.risk_tier,
-            "ai_summary": c.ai_summary,
-            "created_at": c.created_at.isoformat() if c.created_at else ""
-        })
+        out.append(
+            {
+                "id": str(c.id),
+                "journal_text": c.journal_text,
+                "sentiment_label": label,
+                "sentiment_score": score,
+                "risk_tier": c.risk_tier,
+                "ai_summary": c.ai_summary,
+                "created_at": c.created_at.isoformat() if c.created_at else "",
+            }
+        )
     return out
 
-@router.post("/checkins", response_model=CheckinResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/checkins", status_code=status.HTTP_201_CREATED
+)
 async def submit_checkin(
     checkin_data: CheckinCreate,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     if current_user.role != "patient":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only patient accounts can submit recovery check-ins."
+            detail="Only patient accounts can submit recovery check-ins.",
         )
 
     sent_res = analyze_log_sentiment(checkin_data.journal_text)
     risk_tier, risk_score, trigger_reason = evaluate_risk(
         mood_score=checkin_data.mood_score,
         craving_level=checkin_data.craving_level,
-        journal_text=checkin_data.journal_text
+        journal_text=checkin_data.journal_text,
     )
 
     new_checkin = RecoveryCheckin(
@@ -345,7 +363,7 @@ async def submit_checkin(
         risk_score=risk_score,
         sentiment_label=sent_res["sentiment_label"],
         sentiment_score=sent_res["sentiment_score"],
-        ai_summary=f"Log Sentiment: {sent_res['sentiment_label']}"
+        ai_summary=f"Log Sentiment: {sent_res['sentiment_label']}",
     )
     db.add(new_checkin)
     await db.commit()
@@ -357,7 +375,7 @@ async def submit_checkin(
             patient_id=str(current_user.id),
             checkin_id=str(new_checkin.id),
             risk_tier=risk_tier,
-            trigger_reason=trigger_reason
+            trigger_reason=trigger_reason,
         )
 
     return new_checkin

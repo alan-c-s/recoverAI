@@ -7,22 +7,24 @@ from app.models.models import RiskAlert
 
 logger = logging.getLogger("recoverai.alert")
 
+
 async def get_redis_client():
     return redis.from_url(settings.REDIS_URL, decode_responses=True)
+
 
 async def trigger_caregiver_alert(
     db: AsyncSession,
     patient_id: str,
     checkin_id: str,
     risk_tier: str,
-    trigger_reason: str
+    trigger_reason: str,
 ) -> RiskAlert:
     alert = RiskAlert(
         patient_id=patient_id,
         checkin_id=checkin_id,
         risk_tier=risk_tier,
         trigger_reason=trigger_reason,
-        is_acknowledged=False
+        is_acknowledged=False,
     )
     db.add(alert)
     await db.commit()
@@ -37,7 +39,7 @@ async def trigger_caregiver_alert(
                 "patient_id": str(patient_id),
                 "risk_tier": risk_tier,
                 "reason": trigger_reason,
-                "created_at": alert.created_at.isoformat()
+                "created_at": alert.created_at.isoformat(),
             }
             await r.publish(f"patient:{patient_id}:alerts", json.dumps(payload))
             await r.publish("global_caregiver_alerts", json.dumps(payload))
