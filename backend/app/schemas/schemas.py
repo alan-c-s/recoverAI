@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -24,8 +24,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -64,8 +63,7 @@ class CheckinResponse(BaseModel):
     ai_summary: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Memory Schemas
 class MemoryCreate(BaseModel):
@@ -81,8 +79,7 @@ class MemoryResponse(BaseModel):
     similarity_score: Optional[float] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Alert Schemas
 class RiskAlertResponse(BaseModel):
@@ -95,8 +92,7 @@ class RiskAlertResponse(BaseModel):
     acknowledged_at: Optional[datetime]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AlertAcknowledgeRequest(BaseModel):
     alert_id: UUID
