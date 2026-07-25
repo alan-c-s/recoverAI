@@ -43,13 +43,19 @@ async def voice_chat_websocket(websocket: WebSocket):
             }))
 
             if risk_tier == "Critical":
+                critical_msg = "CRITICAL SAFETY NOTICE: I care about your safety. Please connect immediately with the 988 Suicide & Crisis Lifeline by calling or texting 988 (Available 24/7, free and confidential)."
                 await websocket.send_text(json.dumps({
                     "type": "transcript_delta",
-                    "delta": "\n\nCRITICAL SAFETY NOTICE: I care about your safety. Please connect immediately with the 988 Suicide & Crisis Lifeline by calling or texting 988 (Available 24/7, free and confidential)."
+                    "delta": critical_msg
+                }))
+                await websocket.send_text(json.dumps({
+                    "type": "stream_complete",
+                    "full_text": critical_msg
                 }))
                 continue
 
             # Stream response using Gemini API if key is present
+            full_response = ""
             if settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
                 try:
                     model = genai.GenerativeModel(
@@ -59,22 +65,33 @@ async def voice_chat_websocket(websocket: WebSocket):
                     response = model.generate_content(content, stream=True)
                     for chunk in response:
                         if chunk.text:
+                            full_response += chunk.text
                             await websocket.send_text(json.dumps({
                                 "type": "transcript_delta",
                                 "delta": chunk.text
                             }))
                 except Exception as e:
                     logger.error(f"Error streaming Gemini response: {str(e)}")
+                    fallback = "I'm listening and right here with you. How are you feeling right now?"
+                    full_response = fallback
                     await websocket.send_text(json.dumps({
                         "type": "transcript_delta",
-                        "delta": "I'm listening and right here with you. How are you feeling right now?"
+                        "delta": fallback
                     }))
             else:
                 # Fallback response if GEMINI_API_KEY is not entered yet
+                fallback = f"I hear you sharing: '{content}'. Thank you for opening up. How can I best support your recovery journey today?"
+                full_response = fallback
                 await websocket.send_text(json.dumps({
                     "type": "transcript_delta",
-                    "delta": f"[RecoverAI Companion]: I hear you: '{content}'. Thank you for sharing. How can I support you today?"
+                    "delta": fallback
                 }))
+
+            # Signal stream complete so browser Speech Synthesis (TTS) can read aloud
+            await websocket.send_text(json.dumps({
+                "type": "stream_complete",
+                "full_text": full_response
+            }))
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected.")

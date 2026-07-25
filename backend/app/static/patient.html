@@ -33,9 +33,7 @@
   <!-- Header -->
   <header class="border-b border-gray-800/80 bg-gray-900/60 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-40">
     <div class="flex items-center gap-3">
-      <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white shadow-lg shadow-teal-500/20">
-        <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white text-lg">R</div>
-      </div>
+      <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-teal-500/20">R</div>
       <div>
         <h1 class="font-bold text-lg text-gray-100 tracking-tight">RecoverAI</h1>
         <p class="text-xs text-teal-400 font-medium">Patient Recovery Companion</p>
@@ -55,12 +53,16 @@
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-semibold mb-2">
-            ✨ Gemini AI Companion Active
+            ✨ Voice & Speech Synthesis Active
           </span>
           <h2 class="text-2xl font-bold text-gray-100">Welcome to your safe reflection space</h2>
-          <p class="text-xs sm:text-sm text-gray-400 mt-1">Speak or type whatever is on your mind today.</p>
+          <p class="text-xs sm:text-sm text-gray-400 mt-1">Speak into the microphone or type below to hear your companion respond aloud.</p>
         </div>
-        <div>
+        <div class="flex items-center gap-2">
+          <!-- Voice Mute Toggle -->
+          <button id="ttsToggleBtn" onclick="toggleTtsMute()" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded-xl border border-gray-700 transition flex items-center gap-1.5">
+            <span id="ttsIcon">🔊</span> <span id="ttsLabel">Voice Audio ON</span>
+          </button>
           <span id="riskBadge" class="px-4 py-2 rounded-xl text-xs font-bold border border-emerald-600 bg-emerald-950/80 text-emerald-300 flex items-center gap-1.5">
             🛡️ Risk Tier: Low
           </span>
@@ -76,22 +78,22 @@
         <div class="flex items-center justify-between border-b border-gray-800 pb-3">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
-            <span class="font-semibold text-gray-200 text-sm">RecoverAI Voice & Chat Stream</span>
+            <span class="font-semibold text-gray-200 text-sm">RecoverAI Interactive Companion</span>
           </div>
           <span id="wsStatus" class="text-xs text-emerald-400 font-medium">● Connected</span>
         </div>
 
-        <!-- Mic Visualizer Circle -->
+        <!-- Mic Visualizer Circle (Web Speech STT) -->
         <div class="flex flex-col items-center justify-center py-6 bg-gray-950/60 rounded-xl border border-gray-800/80">
           <button id="micBtn" onclick="toggleMic()" class="w-16 h-16 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20 transition transform active:scale-95">
-            <svg id="micIcon" class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
           </button>
-          <span id="micText" class="text-xs text-gray-400 mt-3 font-medium">Click microphone to speak</span>
+          <span id="micText" class="text-xs text-gray-400 mt-3 font-medium">Click microphone to speak to companion</span>
         </div>
 
         <!-- AI Response Stream Output -->
         <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-4 min-h-[110px] max-h-[180px] overflow-y-auto">
-          <p id="aiStreamOutput" class="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">Hello! I am your RecoverAI companion. How are you feeling today?</p>
+          <p id="aiStreamOutput" class="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">Hello! I am your RecoverAI companion. I am here to listen and support you. How are you feeling today?</p>
         </div>
 
         <!-- Chat Input Form -->
@@ -174,6 +176,46 @@
   <script>
     let ws;
     let isRecording = false;
+    let recognition = null;
+    let ttsMuted = false;
+    let currentResponseText = '';
+
+    // Initialize Web Speech Recognition API (Speech-to-Text)
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRec();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        isRecording = true;
+        updateMicUI(true, 'Listening... Speak now');
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        document.getElementById('textInput').value = transcript;
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        updateMicUI(false, 'Click microphone to speak');
+        const text = document.getElementById('textInput').value.trim();
+        if (text) {
+          sendMessage();
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        isRecording = false;
+        updateMicUI(false, 'Click microphone to try again');
+      };
+    }
 
     function initWS() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -188,7 +230,10 @@
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'transcript_delta') {
-          document.getElementById('aiStreamOutput').innerText += data.delta;
+          currentResponseText += data.delta;
+          document.getElementById('aiStreamOutput').innerText = currentResponseText;
+        } else if (data.type === 'stream_complete') {
+          speakText(data.full_text || currentResponseText);
         } else if (data.type === 'risk_update') {
           updateRiskBadge(data.risk_tier);
         }
@@ -199,6 +244,40 @@
         document.getElementById('wsStatus').className = 'text-xs text-amber-400 font-medium';
         setTimeout(initWS, 3000);
       };
+    }
+
+    // Text-to-Speech (TTS) Reader
+    function speakText(text) {
+      if (ttsMuted || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel(); // Stop any previous playback
+      
+      const cleanText = text.replace(/\[.*?\]/g, '').trim(); // Clean brackets
+      if (!cleanText) return;
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.rate = 0.95; // Calm, clear pacing
+      utterance.pitch = 1.0;
+      
+      // Try to select a natural English voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
+      if (preferredVoice) utterance.voice = preferredVoice;
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function toggleTtsMute() {
+      ttsMuted = !ttsMuted;
+      const label = document.getElementById('ttsLabel');
+      const icon = document.getElementById('ttsIcon');
+      if (ttsMuted) {
+        window.speechSynthesis.cancel();
+        icon.innerText = '🔇';
+        label.innerText = 'Voice Muted';
+      } else {
+        icon.innerText = '🔊';
+        label.innerText = 'Voice Audio ON';
+      }
     }
 
     function updateRiskBadge(tier) {
@@ -223,7 +302,8 @@
       const text = input.value.trim();
       if (!text) return;
       
-      document.getElementById('aiStreamOutput').innerText = '';
+      currentResponseText = '';
+      document.getElementById('aiStreamOutput').innerText = '...';
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'text', content: text }));
       }
@@ -232,15 +312,27 @@
     }
 
     function toggleMic() {
-      isRecording = !isRecording;
+      if (recognition) {
+        if (isRecording) {
+          recognition.stop();
+        } else {
+          document.getElementById('textInput').value = '';
+          recognition.start();
+        }
+      } else {
+        alert('Web Speech Recognition is not supported by your browser. Please type your message into the box below.');
+      }
+    }
+
+    function updateMicUI(active, labelText) {
       const btn = document.getElementById('micBtn');
       const text = document.getElementById('micText');
-      if (isRecording) {
+      if (active) {
         btn.className = 'w-16 h-16 rounded-full bg-teal-500 text-white flex items-center justify-center pulse-ring shadow-lg shadow-teal-500/50';
-        text.innerText = 'Listening to voice input...';
+        text.innerText = labelText;
       } else {
         btn.className = 'w-16 h-16 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20';
-        text.innerText = 'Click microphone to speak';
+        text.innerText = labelText;
       }
     }
 
@@ -272,7 +364,13 @@
       list.prepend(item);
     }
 
-    window.onload = initWS;
+    window.onload = () => {
+      initWS();
+      // Ensure Web Speech Synthesis voices are loaded
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+      }
+    };
   </script>
 </body>
 </html>
