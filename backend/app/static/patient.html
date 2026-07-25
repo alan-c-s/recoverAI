@@ -53,10 +53,10 @@
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-semibold mb-2">
-            ✨ Voice & Speech Synthesis Active
+            ✨ Voice Buffer: 3-Second Silence Auto-Send
           </span>
           <h2 class="text-2xl font-bold text-gray-100">Welcome to your safe reflection space</h2>
-          <p class="text-xs sm:text-sm text-gray-400 mt-1">Speak into the microphone or type below to hear your companion respond aloud.</p>
+          <p class="text-xs sm:text-sm text-gray-400 mt-1">Speak into the microphone. The system waits for 3 seconds of silence before sending your message.</p>
         </div>
         <div class="flex items-center gap-2">
           <!-- Voice Mute Toggle -->
@@ -83,7 +83,7 @@
           <span id="wsStatus" class="text-xs text-emerald-400 font-medium">● Connected</span>
         </div>
 
-        <!-- Mic Visualizer Circle (Web Speech STT) -->
+        <!-- Mic Visualizer Circle (Web Speech STT with 3-sec Silence Buffer) -->
         <div class="flex flex-col items-center justify-center py-6 bg-gray-950/60 rounded-xl border border-gray-800/80">
           <button id="micBtn" onclick="toggleMic()" class="w-16 h-16 rounded-full bg-teal-600 hover:bg-teal-500 text-white flex items-center justify-center shadow-lg shadow-teal-500/20 transition transform active:scale-95">
             <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
@@ -179,18 +179,20 @@
     let recognition = null;
     let ttsMuted = false;
     let currentResponseText = '';
+    let silenceTimer = null;
+    const SILENCE_THRESHOLD_MS = 3000; // 3 Seconds Silence Buffer
 
     // Initialize Web Speech Recognition API (Speech-to-Text)
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRec();
-      recognition.continuous = false;
+      recognition.continuous = true; // Stay active during speech pauses
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
       recognition.onstart = () => {
         isRecording = true;
-        updateMicUI(true, 'Listening... Speak now');
+        updateMicUI(true, 'Listening... Speak freely');
       };
 
       recognition.onresult = (event) => {
@@ -198,10 +200,23 @@
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        document.getElementById('textInput').value = transcript;
+        if (transcript.trim()) {
+          document.getElementById('textInput').value = transcript;
+          
+          // Reset 3-second silence timer on new speech input
+          if (silenceTimer) clearTimeout(silenceTimer);
+          updateMicUI(true, 'Listening... (Will send after 3 seconds of silence)');
+          
+          silenceTimer = setTimeout(() => {
+            if (isRecording) {
+              recognition.stop(); // Stops recognition and triggers auto-send onend
+            }
+          }, SILENCE_THRESHOLD_MS);
+        }
       };
 
       recognition.onend = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
         isRecording = false;
         updateMicUI(false, 'Click microphone to speak');
         const text = document.getElementById('textInput').value.trim();
@@ -212,6 +227,7 @@
 
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
+        if (silenceTimer) clearTimeout(silenceTimer);
         isRecording = false;
         updateMicUI(false, 'Click microphone to try again');
       };
@@ -258,7 +274,7 @@
       utterance.rate = 0.95; // Calm, clear pacing
       utterance.pitch = 1.0;
       
-      // Try to select a natural English voice if available
+      // Select natural English voice if available
       const voices = window.speechSynthesis.getVoices();
       const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
       if (preferredVoice) utterance.voice = preferredVoice;
@@ -314,6 +330,7 @@
     function toggleMic() {
       if (recognition) {
         if (isRecording) {
+          if (silenceTimer) clearTimeout(silenceTimer);
           recognition.stop();
         } else {
           document.getElementById('textInput').value = '';
@@ -366,7 +383,6 @@
 
     window.onload = () => {
       initWS();
-      // Ensure Web Speech Synthesis voices are loaded
       if ('speechSynthesis' in window) {
         window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
       }
