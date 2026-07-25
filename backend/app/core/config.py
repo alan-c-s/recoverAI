@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
@@ -27,5 +28,15 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["*"]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @property
+    def effective_gemini_api_key(self) -> str:
+        """Returns environment variable GEMINI_API_KEY from process environment or settings."""
+        env_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if env_key and not env_key.startswith("your_"):
+            return env_key
+        if self.GEMINI_API_KEY and not self.GEMINI_API_KEY.startswith("your_"):
+            return self.GEMINI_API_KEY
+        return ""
 
 settings = Settings()
