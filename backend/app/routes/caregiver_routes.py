@@ -25,7 +25,6 @@ async def list_demo_alerts(db: AsyncSession = Depends(get_db)):
             "checkin_id": str(a.checkin_id) if a.checkin_id else None,
             "risk_tier": a.risk_tier,
             "trigger_reason": a.trigger_reason,
-            "status": a.status,
             "is_acknowledged": a.is_acknowledged,
             "created_at": a.created_at.isoformat() if a.created_at else ""
         }
