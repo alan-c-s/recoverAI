@@ -1,8 +1,9 @@
 import uuid
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List
 
 from app.database.session import get_db
 from app.models.models import User, RecoveryCheckin, RiskAlert
@@ -15,6 +16,10 @@ from app.services.rag_service import save_memory
 router = APIRouter(prefix="/recovery", tags=["Recovery & Check-ins"])
 
 DEFAULT_PATIENT_ID = "00000000-0000-0000-0000-000000000001"
+
+class LocationAlertRequest(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 async def ensure_demo_users(db: AsyncSession):
     """Ensure demo patient and caregiver exist in SQLite database."""
@@ -33,15 +38,26 @@ async def ensure_demo_users(db: AsyncSession):
         await db.commit()
 
 @router.post("/instant-alert")
-async def trigger_instant_caregiver_alert(db: AsyncSession = Depends(get_db)):
-    """Allows patient to manually alert their caregiver immediately."""
+async def trigger_instant_caregiver_alert(
+    loc: Optional[LocationAlertRequest] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Allows patient to manually alert their caregiver immediately with HTML5 geolocation."""
     await ensure_demo_users(db)
     
+    loc_str = ""
+    if loc and loc.latitude and loc.longitude:
+        maps_link = f"https://maps.google.com/?q={loc.latitude},{loc.longitude}"
+        loc_str = f" 📍 Patient Live Location: {maps_link}"
+    else:
+        loc_str = " 📍 Location: Shared from Patient Companion Web App"
+
+    trigger_reason = f"🚨 PATIENT MANUAL ALERT: Immediate assistance requested.{loc_str}"
+
     alert = RiskAlert(
         patient_id=DEFAULT_PATIENT_ID,
         risk_tier="High",
-        trigger_reason="🚨 PATIENT MANUAL ALERT: Patient explicitly requested immediate caregiver assistance from web app.",
-        status="Active",
+        trigger_reason=trigger_reason,
         is_acknowledged=False
     )
     db.add(alert)
@@ -51,6 +67,7 @@ async def trigger_instant_caregiver_alert(db: AsyncSession = Depends(get_db)):
     return {
         "status": "success",
         "alert_id": str(alert.id),
+        "trigger_reason": trigger_reason,
         "message": "Caregiver alert dispatched immediately to Caregiver Sentinel Portal."
     }
 
@@ -103,7 +120,6 @@ async def submit_demo_checkin(
             checkin_id=new_checkin.id,
             risk_tier=risk_tier,
             trigger_reason=trigger_reason or f"Elevated Craving Level ({checkin_data.craving_level}/10)",
-            status="Active",
             is_acknowledged=False
         )
         db.add(alert)
