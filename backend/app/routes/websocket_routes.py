@@ -15,10 +15,10 @@ Keep responses warm, encouraging, non-judgmental, active-listening, and concise 
 Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
 
 CANDIDATE_MODELS = [
+    "gemini-1.5-flash",
     "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-2.0-flash-lite",
-    "gemini-2.5-flash"
+    "gemini-flash-latest",
+    "gemini-1.5-pro"
 ]
 
 def get_genai_client():
@@ -99,7 +99,7 @@ async def voice_chat_websocket(websocket: WebSocket):
                 if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY.startswith("your_"):
                     full_response = f"I hear you sharing: '{content}'. Please generate a free Gemini API key (starting with AIzaSy...) at https://aistudio.google.com/ and set GEMINI_API_KEY in backend/.env to get live Gemini responses!"
                 else:
-                    full_response = f"I hear you: '{content}'. Your API key (or quota limit) needs updating in backend/.env. Please generate a fresh free key at https://aistudio.google.com/."
+                    full_response = f"I hear you: '{content}'. Your API key or rate limit is being reset. Please ensure you have a free Gemini key starting with AIzaSy... from https://aistudio.google.com/."
 
                 await websocket.send_text(json.dumps({
                     "type": "transcript_delta",
