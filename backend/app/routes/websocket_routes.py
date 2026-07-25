@@ -20,14 +20,14 @@ Rules:
 1. Speak in a naturally expressive, comforting, and conversational tone.
 2. Use warm, natural phrasing with gentle pauses (commas/periods) for expressive speech synthesis pacing.
 3. Keep responses concise (2-3 sentences max).
-4. Use the patient's recovery journal history provided below to encourage them, celebrate their progress, and gently remind them of past coping strategies that worked for them.
+4. Use the patient's recovery journal history provided below to encourage them, celebrate their progress, and gently remind them of past coping strategies that worked for them (like walking or talking with Sarah).
 5. Never give medical diagnoses. If self-harm or suicide is mentioned, encourage calling/texting 988 immediately."""
 
 CANDIDATE_MODELS = [
-    "gemini-1.5-flash",
     "gemini-2.0-flash",
-    "gemini-flash-latest",
-    "gemini-1.5-pro"
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-flash-latest"
 ]
 
 def get_genai_client():
@@ -51,7 +51,8 @@ async def fetch_patient_journal_context() -> str:
 
             history_lines = []
             for c in checkins:
-                line = f"- Check-in ({c.created_at.strftime('%b %d') if c.created_at else 'Recent'}): Mood {c.mood_score}/10, Craving {c.craving_level}/10. Reflection: '{c.journal_text}'"
+                sent = f" ({c.sentiment_label})" if c.sentiment_label else ""
+                line = f"- Log ({c.created_at.strftime('%b %d') if c.created_at else 'Recent'}){sent}: Reflection: '{c.journal_text}'"
                 history_lines.append(line)
 
             context_str = "\n\nPATIENT RECOVERY JOURNAL HISTORY (From SQLite DB):\n" + "\n".join(history_lines)
@@ -135,7 +136,7 @@ async def voice_chat_websocket(websocket: WebSocket):
                 if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY.startswith("your_"):
                     full_response = f"I hear you sharing: '{content}'. Please generate a free Gemini API key (starting with AIzaSy...) at https://aistudio.google.com/ and set GEMINI_API_KEY in backend/.env to get live Gemini responses!"
                 else:
-                    full_response = f"I hear you: '{content}'. Your API key or rate limit is being reset. Please ensure you have a free Gemini key starting with AIzaSy... from https://aistudio.google.com/."
+                    full_response = f"I hear you: '{content}'. Your API key or rate limit is being reset. Please ensure your key starts with AIzaSy... from https://aistudio.google.com/."
 
                 await websocket.send_text(json.dumps({
                     "type": "transcript_delta",
