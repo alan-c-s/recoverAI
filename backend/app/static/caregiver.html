@@ -39,13 +39,13 @@
     <div class="glass rounded-2xl p-6 bg-gradient-to-r from-gray-900 via-amber-950/20 to-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div>
         <h2 class="text-2xl font-bold text-gray-100">Caregiver Sentinel Dashboard</h2>
-        <p class="text-xs sm:text-sm text-gray-400 mt-1">Real-time risk tracking for assigned patients.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mt-1">Real-time risk tracking for assigned patients (SQLite Persistent Database).</p>
       </div>
       <div class="bg-gray-950 border border-gray-800 px-4 py-2 rounded-xl flex items-center gap-3">
         <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
         <div>
-          <div class="text-[10px] text-gray-400 uppercase font-semibold">Active Alerts</div>
-          <div id="activeAlertCount" class="text-sm font-bold text-amber-400">1 Unacknowledged</div>
+          <div class="text-[10px] text-gray-400 uppercase font-semibold">Unacknowledged Risk Alerts</div>
+          <div id="activeAlertCount" class="text-sm font-bold text-amber-400">0 Unacknowledged</div>
         </div>
       </div>
     </div>
@@ -61,17 +61,17 @@
 
         <div class="p-4 bg-gray-950/80 rounded-xl border border-gray-800 space-y-3">
           <div class="flex items-center justify-between">
-            <span class="font-bold text-gray-100 text-base">Alex Mercer</span>
-            <span class="px-2.5 py-0.5 rounded-full bg-amber-950 border border-amber-600 text-amber-300 text-[10px] font-bold">HIGH RISK</span>
+            <span class="font-bold text-gray-100 text-base">Demo Patient</span>
+            <span id="patientStatusBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-600 text-emerald-300 text-[10px] font-bold">MONITORED</span>
           </div>
           <div class="text-xs text-gray-400 space-y-1.5 border-t border-gray-800/60 pt-2">
-            <p><strong>Relationship:</strong> Family / Caregiver</p>
-            <p><strong>Last Check-in:</strong> 10 minutes ago</p>
-            <p><strong>Self-Reported:</strong> Mood 4/10 | Craving 8/10</p>
+            <p><strong>Relationship:</strong> Designated Caregiver</p>
+            <p><strong>Monitoring Status:</strong> Live Sentinel Active</p>
+            <p><strong>Database:</strong> SQLite (`recoverai.db`)</p>
           </div>
           <div class="pt-2">
-            <a href="tel:+15550192834" class="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition">
-              📞 Call Alex Directly
+            <a href="/patient" target="_blank" class="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition">
+              🔗 Open Patient Web Companion
             </a>
           </div>
         </div>
@@ -81,46 +81,15 @@
       <div class="md:col-span-2 glass rounded-2xl p-6 space-y-4">
         <div class="flex items-center justify-between border-b border-gray-800 pb-3">
           <h3 class="font-semibold text-gray-200 text-sm flex items-center gap-2">
-            🚨 Real-Time Risk Alert Feed
+            🚨 Real-Time Risk Alert Feed (SQLite)
           </h3>
-          <span class="text-xs text-gray-500">Live Sentinel Updates</span>
+          <span class="text-xs text-emerald-400 flex items-center gap-1 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Auto-refreshing every 3s
+          </span>
         </div>
 
         <div id="alertList" class="space-y-3">
-          <!-- Alert Item 1 -->
-          <div id="alert-101" class="p-4 rounded-xl border border-amber-800 bg-amber-950/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="space-y-1">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500 text-black">HIGH</span>
-                <span class="font-bold text-gray-200 text-sm">Alex Mercer</span>
-                <span class="text-xs text-gray-500">• 10 mins ago</span>
-              </div>
-              <p class="text-xs text-gray-300">Elevated craving level (8/10) reported during check-in reflection.</p>
-            </div>
-            <div>
-              <button onclick="acknowledgeAlert('alert-101')" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl transition">
-                Acknowledge Alert
-              </button>
-            </div>
-          </div>
-
-          <!-- Alert Item 2 -->
-          <div class="p-4 rounded-xl border border-gray-800 bg-gray-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="space-y-1">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-yellow-500 text-black">MEDIUM</span>
-                <span class="font-bold text-gray-200 text-sm">Alex Mercer</span>
-                <span class="text-xs text-gray-500">• 2 hours ago</span>
-              </div>
-              <p class="text-xs text-gray-300">Low mood score (3/10) and stress indicator detected.</p>
-            </div>
-            <div>
-              <span class="inline-flex items-center gap-1 text-xs text-emerald-400 font-semibold px-3 py-1 bg-emerald-950/60 border border-emerald-800 rounded-xl">
-                ✓ Acknowledged
-              </span>
-            </div>
-          </div>
-
+          <p class="text-gray-500 italic text-xs">Loading live alerts from database...</p>
         </div>
       </div>
 
@@ -133,17 +102,89 @@
   </footer>
 
   <script>
-    function acknowledgeAlert(elementId) {
-      const item = document.getElementById(elementId);
-      if (!item) return;
-      const btnContainer = item.querySelector('button').parentElement;
-      btnContainer.innerHTML = `
-        <span class="inline-flex items-center gap-1 text-xs text-emerald-400 font-semibold px-3 py-1 bg-emerald-950/60 border border-emerald-800 rounded-xl">
-          ✓ Acknowledged
-        </span>
-      `;
-      document.getElementById('activeAlertCount').innerText = '0 Unacknowledged';
+    async function loadAlerts() {
+      try {
+        const res = await fetch('/v1/caregiver/demo-alerts');
+        if (!res.ok) return;
+        const alerts = await res.json();
+        const container = document.getElementById('alertList');
+        
+        const unackCount = alerts.filter(a => !a.is_acknowledged).length;
+        document.getElementById('activeAlertCount').innerText = `${unackCount} Unacknowledged`;
+
+        if (!alerts.length) {
+          container.innerHTML = `
+            <div class="p-6 text-center border border-gray-800 rounded-xl bg-gray-950/40">
+              <p class="text-gray-400 text-xs font-medium">🛡️ No risk alerts logged yet.</p>
+              <p class="text-gray-500 text-[11px] mt-1">Submit a high-craving reflection in the Patient Companion to test live escalation.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = alerts.map(alert => {
+          const isCritical = alert.risk_tier === 'Critical';
+          const isHigh = alert.risk_tier === 'High';
+          const isMedium = alert.risk_tier === 'Medium';
+          
+          let borderColor = 'border-gray-800 bg-gray-950/40';
+          let badgeColor = 'bg-yellow-500 text-black';
+          
+          if (isCritical) {
+            borderColor = 'border-rose-800 bg-rose-950/30';
+            badgeColor = 'bg-rose-600 text-white';
+          } else if (isHigh) {
+            borderColor = 'border-amber-800 bg-amber-950/30';
+            badgeColor = 'bg-amber-500 text-black';
+          }
+
+          const timeStr = alert.created_at ? new Date(alert.created_at).toLocaleString() : '';
+
+          return `
+            <div class="p-4 rounded-xl border ${borderColor} flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${badgeColor}">${alert.risk_tier} RISK</span>
+                  <span class="font-bold text-gray-200 text-sm">Demo Patient</span>
+                  <span class="text-xs text-gray-500">• ${timeStr}</span>
+                </div>
+                <p class="text-xs text-gray-300">${alert.trigger_reason || 'Elevated risk reported during daily reflection.'}</p>
+              </div>
+              <div>
+                ${alert.is_acknowledged ? `
+                  <span class="inline-flex items-center gap-1 text-xs text-emerald-400 font-semibold px-3 py-1 bg-emerald-950/60 border border-emerald-800 rounded-xl">
+                    ✓ Acknowledged
+                  </span>
+                ` : `
+                  <button onclick="acknowledgeAlert('${alert.id}')" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-xl transition">
+                    Acknowledge Alert
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch(e) {
+        console.error('Error loading caregiver alerts:', e);
+      }
     }
+
+    async function acknowledgeAlert(alertId) {
+      try {
+        const res = await fetch(`/v1/caregiver/demo-acknowledge/${alertId}`, { method: 'POST' });
+        if (res.ok) {
+          loadAlerts();
+        }
+      } catch(e) {
+        console.error('Error acknowledging alert:', e);
+      }
+    }
+
+    window.onload = () => {
+      loadAlerts();
+      setInterval(loadAlerts, 3000); // Auto-refresh live alerts every 3s
+    };
   </script>
 </body>
 </html>
